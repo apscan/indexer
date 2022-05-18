@@ -59,487 +59,207 @@ paths:
           description: Returns OpenAPI specification YAML document.
         "400":
           description: Bad Request
-
-  /ownerships/byToken:
-      get:
-        description: "Returns ownerships by token id"
-        operationId: getOwnershipsByToken
-        parameters:
-          - name: "tokenId"
-            in: query
-            required: true
-            description: "Token Id, has format `${address}:${collection_name}:${token_name}`"
-            schema:
-              $ref: "#/components/schemas/TokenId"
-          - name: "continuation"
-            in: query
-            required: false
-            description: "Continuation token from the previous response"
-            schema:
-              type: string
-          - name: "size"
-            in: query
-            required: false
-            description: "The number of items to return"
-            schema:
-              type: integer
-        responses:
-          "200":
-            description: "OK"
-            content:
-              application/json:
-                schema:
-                  $ref: "#/components/schemas/Ownerships"
-          '400':
-            $ref: "#/components/responses/400"
-          '500':
-            $ref: "#/components/responses/500"
-
-  /accounts/{address}:
+  /tokens/{TokenId}:
     get:
-      summary: Get account
-      operationId: get_account
-      tags:
-        - accounts
-        - state
+      description: "Returns Token by Id"
+      operationId: getTokenById
       parameters:
-        - $ref: '#/components/parameters/AccountAddress'
-      responses:
-        "200":
-          description: Returns the latest account core data resource.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Account'
-        "400":
-          $ref: '#/components/responses/400'
-        "404":
-          $ref: '#/components/responses/404'
-        "500":
-          $ref: '#/components/responses/500'
-  /accounts/{address}/resources:
-    get:
-      summary: Get account resources
-      operationId: get_account_resources
-      tags:
-        - accounts
-        - state
-      parameters:
-        - $ref: '#/components/parameters/AccountAddress'
-        - $ref: '#/components/parameters/LedgerVersion'
-      responses:
-        "200":
-          description: |
-            This API returns account resources for a specific ledger version (AKA transaction version).
-            If not present, the latest version is used.
-
-            The Aptos nodes prune account state history, via a configurable time window (link).
-
-            If the requested data has been pruned, the server responds with a 404
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/AccountResource'
-        "400":
-          $ref: '#/components/responses/400'
-        "404":
-          $ref: '#/components/responses/404'
-        "500":
-          $ref: '#/components/responses/500'
-  /accounts/{address}/resource/{resource_type}:
-    get:
-      summary: Get resource by account address and resource type.
-      operationId: get_account_resource # TODO: make it query_resource if query path is supported
-      description: |
-        This API renders a resource identified by the owner account
-        `address` and the `resource_type`, at a ledger version (AKA
-        transaction version) specified as a query param, otherwise the
-        latest version is used.
-      tags:
-        - accounts
-        - state
-      parameters:
-        - $ref: '#/components/parameters/AccountAddress'
-        - name: resource_type
+        - name: "TokenId"
           in: path
           required: true
+          description: "Token Id, has format `${address}:${collection_name}:${token_name}`"
           schema:
-            $ref: '#/components/schemas/MoveStructTagId'
-          example: "0x1::AptosAccount::AptosAccount"
-        - $ref: '#/components/parameters/LedgerVersion'
+            $ref: "#/components/schemas/TokenId"
       responses:
         "200":
-          description: Returns a resource.
+          description: "OK"
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AccountResource'
-        "400":
-          $ref: '#/components/responses/400'
-        "404":
+                $ref: "#/components/schemas/Token"
+        '404':
           $ref: '#/components/responses/404'
-        "500":
-          $ref: '#/components/responses/500'
-  /accounts/{address}/modules:
-    get:
-      summary: Get account modules
-      operationId: get_account_modules
-      tags:
-        - accounts
-        - state
-      parameters:
-        - $ref: '#/components/parameters/AccountAddress'
-        - $ref: '#/components/parameters/LedgerVersion'
-      responses:
-        "200":
-          description: |
-            This API returns account modules for a specific ledger version (AKA transaction version).
-            If not present, the latest version is used.
-
-            The Aptos nodes prune account state history, via a configurable time window (link).
-
-            If the requested data has been pruned, the server responds with a 404
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/MoveModule'
-        "400":
+        '400':
           $ref: '#/components/responses/400'
-        "404":
-          $ref: '#/components/responses/404'
-        "500":
+        '500':
           $ref: '#/components/responses/500'
-  /accounts/{address}/module/{module_name}:
+  /token_metadata/{tokenId}:
     get:
-      summary: Get module by module id.
-      operationId: get_account_module
-      description: |
-        This API renders a Move module identified by the module id. A
-        module id consists of the module owner `address` and the
-        `module_name`. The module is rendered at a ledger version (AKA
-        transaction version) specified as a query param, otherwise the
-        latest version is used.
-      tags:
-        - accounts
-        - state
+      description: "Returns TokenMetaData by Id"
+      operationId: getTokenMetaDataById
       parameters:
-        - $ref: '#/components/parameters/AccountAddress'
-        - name: module_name
+        - name: "tokenId"
           in: path
           required: true
-          description: The name of the module.
+          description: "TokenId, has format `${address}:${collection_name}:${token_name}`"
           schema:
-            type: string
-          example: "GUID"
-        - $ref: '#/components/parameters/LedgerVersion'
+            $ref: "#/components/schemas/TokenId"
       responses:
         "200":
-          description: Returns a move module.
+          description: "OK"
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MoveModule'
-        "400":
-          $ref: '#/components/responses/400'
-        "404":
+                $ref: "#/components/schemas/TokenMetaData"
+        '404':
           $ref: '#/components/responses/404'
-        "500":
-          $ref: '#/components/responses/500'
-  /transactions:
-    get:
-      summary: Get transactions
-      operationId: get_transactions
-      tags:
-        - transactions
-      parameters:
-        - $ref: '#/components/parameters/StartVersion'
-        - $ref: '#/components/parameters/Limit'
-      responses:
-        "200":
-          description: Returns on-chain transactions, paginated.
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/OnChainTransaction'
-        "400":
+        '400':
           $ref: '#/components/responses/400'
-        "404":
-          $ref: '#/components/responses/404'
-        "500":
+        '500':
           $ref: '#/components/responses/500'
+  /token_metadata/byIds:
     post:
-      summary: Submit transaction
-      operationId: submit_transaction
-      description: |
-        **Submit transaction using JSON without additional tools**
-
-          * Send [POST /transactions/signing_message](#operation/create-signing-message) to create transaction signing message.
-          * Sign the transaction signing message and create transaction signature.
-          * Submit the user transaction request with the transaction siganture. The request header "Content-Type" must set to "application/json".
-
-      tags:
-        - transactions
+      description: "Returns TokenMetaData by Ids"
+      operationId: getTokenMetaDataByIds
       requestBody:
-        description: |
-          User transaction request with transaction sender's signature.
-        required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/SubmitTransactionRequest'
-      responses:
-        "202":
-          description: Transaction is accepted and submitted to mempool.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PendingTransaction'
-        "400":
-          $ref: '#/components/responses/400'
-        "413":
-          $ref: '#/components/responses/413'
-        "415":
-          $ref: '#/components/responses/415'
-        "500":
-          $ref: '#/components/responses/500'
-  /accounts/{address}/transactions:
-    get:
-      summary: Get account transactions
-      operationId: get_account_transactions
-      tags:
-        - transactions
-      parameters:
-        - $ref: '#/components/parameters/AccountAddress'
-        - $ref: '#/components/parameters/StartVersion'
-        - $ref: '#/components/parameters/Limit'
+              $ref: "#/components/schemas/TokenIds"
       responses:
         "200":
-          description: Returns on-chain transactions, paginated.
+          description: "OK"
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/OnChainTransaction'
-        "400":
-          $ref: '#/components/responses/400'
-        "500":
-          $ref: '#/components/responses/500'
-  /transactions/{txn_hash_or_version}:
-    get:
-      summary: Get transaction
-      description: |
-        There are two types of transaction identifiers:
-          1. Transaction hash: included in any transaction JSON respond from server.
-          2. Transaction version: included in on-chain transaction JSON respond from server.
-
-        When given transaction hash, server first looks up on-chain transaction by hash;
-        if no on-chain transaction found, then look up transaction by hash in the mempool
-        (pending) transactions.
-
-        When given a transaction version, server looks up the transaction on-chain by version.
-
-        To create a transaction hash:
-          1. Create hash message bytes: "Aptos::Transaction" bytes + BCS bytes of [Transaction](https://aptos-labs.github.io/aptos-core/aptos_types/transaction/enum.Transaction.html).
-          2. Apply hash algorithm `SHA3-256` to the hash message bytes.
-          3. Hex-encode the hash bytes with `0x` prefix.
-      operationId: get_transaction
-      tags:
-        - transactions
-      parameters:
-        - name: txn_hash_or_version
-          in: path
-          required: true
-          description: |
-            * Transaction hash should be hex-encoded bytes string with `0x` prefix.
-            * Transaction version is an `uint64` number.
-          schema:
-            type: string
-      responses:
-        "200":
-          description: |
-            Returns a pending / on-chain transaction.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Transaction'
-        "400":
-          $ref: '#/components/responses/400'
-        "404":
+                $ref: "#/components/schemas/TokenMetaData"
+        '404':
           $ref: '#/components/responses/404'
-        "500":
+        '400':
+          $ref: '#/components/responses/400'
+        '500':
           $ref: '#/components/responses/500'
-  /transactions/signing_message:
+  /tokens/byIds:
     post:
-      summary: Create transaction signing message
-      description: |
-        This API creates transaction signing message for client to create
-        transaction signature.
-
-        The success response contains hex-encoded signing message bytes.
-
-        **To sign the message**
-
-          1. Client first needs to HEX decode the `message` into bytes.
-          2. Then sign the bytes to create signature.
-      operationId: create_signing_message
-      tags:
-        - transactions
+      description: "Returns Tokens by Ids"
+      operationId: getTokenByIds
       requestBody:
-        description: User transaction request
-        required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/UserTransactionRequest'
-      responses:
-        "200":
-          description: |
-            Returns hex-encoded transaction signing message bytes.
-          content:
-            application/json:
-              schema:
-                type: object
-                required:
-                  - message
-                properties:
-                  message:
-                    $ref: '#/components/schemas/HexEncodedBytes'
-        "400":
-          $ref: '#/components/responses/400'
-        "404":
-          $ref: '#/components/responses/404'
-        "413":
-          $ref: '#/components/responses/413'
-        "415":
-          $ref: '#/components/responses/415'
-        "500":
-          $ref: '#/components/responses/500'
-  /events/{event_key}:
-    get:
-      summary: Get events by event key
-      operationId: get_events_by_event_key
-      tags:
-        - events
-      parameters:
-        - name: event_key
-          in: path
-          required: true
-          description: |
-            Event key for an event stream.
-            It is BCS serialized bytes of `guid` field in the Move struct `EventHandle`.
-          schema:
-            $ref: '#/components/schemas/HexEncodedBytes'
-      responses:
-        "200":
-          description: |
-            Returns events
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Event'
-        "400":
-          $ref: '#/components/responses/400'
-        "404":
-          $ref: '#/components/responses/404'
-        "500":
-          $ref: '#/components/responses/500'
-  /accounts/{address}/events/{event_handle_struct}/{field_name}:
-    get:
-      summary: Get events by event handle
-      operationId: get_events_by_event_handle
-      description: |
-        This API extracts event key from the account resource identified
-        by the `event_handle_struct` and `field_name`, then returns
-        events identified by the event key.
-      tags:
-        - events
-      parameters:
-        - $ref: '#/components/parameters/AccountAddress'
-        - name: event_handle_struct
-          in: path
-          required: true
-          schema:
-            $ref: '#/components/schemas/MoveStructTagId'
-          example: "0x1::AptosAccount::AptosAccount"
-        - name: field_name
-          in: path
-          required: true
-          description: |
-            The field name of the `EventHandle` in the struct.
-          schema:
-            type: string
-          example: "sent_events"
-        - $ref: '#/components/parameters/EventStart'
-        - $ref: '#/components/parameters/EventLimit'
-      responses:
-        "200":
-          description: |
-            Returns events
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Event'
-        "400":
-          $ref: '#/components/responses/400'
-        "404":
-          $ref: '#/components/responses/404'
-        "500":
-          $ref: '#/components/responses/500'
-  /tables/{table_handle}/item:
-    post:
-      summary: Get table item by handle and key.
-      description: |
-        Gets a table item for a table identified by the handle and the key for the item.
-        Key and value types need to be passed in to help with key serialization and value deserialization.
-      operationId: get_table_item
-      tags:
-        - state
-        - table
-      parameters:
-        - name: table_handle
-          in: path
-          required: true
-          schema:
-            title: Table Handle
-            type: string
-            format: uint128
-            description: the table handle
-          example: "1283023094380"
-      requestBody:
-        description: Table item request
+              $ref: "#/components/schemas/TokenIds"
         required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/TableItemRequest'
       responses:
         "200":
-          description: Returns the table item value rendered in JSON.
+          description: "OK"
           content:
             application/json:
               schema:
-                type: object
-        "400":
-          $ref: '#/components/responses/400'
-        "404":
-          $ref: '#/components/responses/404'
-        "413":
-          $ref: '#/components/responses/413'
-        "415":
-          $ref: '#/components/responses/415'
-        "500":
-          $ref: '#/components/responses/500'
+                $ref: "#/components/schemas/Tokens"
+        '404':
+          $ref: "#/components/responses/404"
+        '400':
+          $ref: "#/components/responses/400"
+        '500':
+          $ref: "#/components/responses/500"
+  /ownerships/{ownershipId}:
+    get:
+      description: "Returns ownership by Id"
+      operationId: getOwnershipById
+      parameters:
+        - name: "ownershipId"
+          in: path
+          required: true
+          description: "Ownership Id in format: '${blockchain}:${token}:${tokenId}:${owner}'"
+          schema:
+            $ref: "#/components/schemas/OwnershipId"
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Ownership"
+        '404':
+          $ref: "#/components/responses/404"
+        '400':
+          $ref: "#/components/responses/400"
+        '500':
+          $ref: "#/components/responses/500"
+  /collections/{collection}:
+    get:
+      description: "Returns collection by collection id"
+      operationId: getCollectionById
+      parameters:
+        - name: "collectionId"
+          in: path
+          required: true
+          description: "Id of the collection"
+          schema:
+            $ref: "#/components/schemas/CollectionId"
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Collection"
+        '404':
+          $ref: "#/components/responses/404"
+        '400':
+          $ref: "#/components/responses/400"
+        '500':
+          $ref: "#/components/responses/500"
+  /activities/byUser:
+    get:
+      tags:
+        - activity-controller
+      description: "Returns activities by user"
+      operationId: getActivitiesByUser
+      parameters:
+        - name: "type"
+          in: query
+          required: true
+          description: "Activity type"
+          schema:
+            type: "array"
+            items:
+              $ref: "#/components/schemas/UserActivityType"
+        - name: "user"
+          in: query
+          required: true
+          description: "Addresses of the users"
+          schema:
+            type: array
+            items:
+              "$ref": "#/components/schemas/Address"
+        - name: "from"
+          in: query
+          required: false
+          description: "Lower time border of data"
+          schema:
+            type: string
+            format: "date-time"
+        - name: "to"
+          in: query
+          required: false
+          description: "Upper time border of data"
+          schema:
+            type: string
+            format: "date-time"
+        - name: "size"
+          in: query
+          required: false
+          description: "The number of items to return"
+          schema:
+            type: integer
+        - name: "sort"
+          in: query
+          required: false
+          description: "Sorting by data update time"
+          schema:
+            "$ref": "#/components/schemas/ActivitySort"
+      responses:
+        "200":
+          description: "OK"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Activities"
+        '400':
+          $ref: "#/components/responses/BadRequest"
+        '500':
+          $ref: "#/components/responses/ServerError"
 components:
   parameters:
     AccountAddress:
@@ -1745,3 +1465,209 @@ components:
           $ref: '#/components/schemas/MoveTypeId'
         key:
           $ref: '#/components/schemas/MoveValue'
+    TokenId:
+      title: token Id
+      type: string
+      format: string
+      description:
+        token id is the unique identifier of a token.
+        
+        It consists of 3 parts joined with "::".
+        
+        The 3 parts are creator account address, collection name and token name
+      example: "0x1::APE::LASER_APE"
+    TokenIds:
+      type: object
+      properties:
+        ids:
+          type: array
+          description: "List of token Ids "
+          items:
+            $ref: "#/components/schemas/TokenId"
+    Royalty:
+      type: object
+      properties:
+        account:
+          $ref: "#/components/schemas/Address"
+        value:
+          type: integer
+    Royalties:
+      type: object
+      properties:
+        royalties:
+          type: array
+          items:
+            $ref: "#/components/schemas/Royalty"
+    Tokens:
+      title: Tokens
+      type: object
+      properties:
+        tokens:
+          type: array
+          items:
+            $ref: "#/components/schemas/Token"
+    Token:
+      title: Token
+      type: object
+      description: Aptos Token data
+      properties:
+        id:
+          $ref: "#/components/schemas/TokenId"
+        contract:
+          $ref: '#/components/schemas/MoveModuleId'
+        creator:
+          $ref: "#/components/schemas/Address"
+        supply:
+          type: integer
+        owner:
+          $ref: "#/components/schemas/Address"
+        royalties:
+          $ref: "#/components/schemas/Royalties"
+        deleted:
+          type: boolean
+          example: False
+        max:
+          type: integer
+          description: The max number of this token
+    CollectionId:
+      title: Colelction Id
+      description: A Id of a collection
+      type: string
+      example: "0x1::my_awesome_collection"
+    Collection:
+      title: NFT collection
+      description: A collection of tokens
+      properties:
+        id:
+          $ref: "#/components/schemas/CollectionId"
+        name:
+          type: string
+        owner:
+          $ref: "#/components/schemas/Address"
+        ceator:
+          $ref: "#/components/schemas/Address"
+        maxSupply:
+          type: integer
+        count:
+          type: integer
+          example: 1
+          description: the number of tokens in this collection
+        description:
+          type: string
+        uri:
+          type: string
+    TokenMetaData:
+      title: token metadata
+      type: object
+      description: the metadata of tokens
+      properties:
+        name:
+          type: string
+          description: the name of this token
+        collection:
+          type: string
+          description: the name of the collection
+        description:
+          type: string
+          description: description of the token
+        maxium:
+          type: integer
+        uri:
+          type: string
+    OwnershipId:
+      type: string
+      description: the ownership Id is the  "TokenID::Owner"
+      example:
+    OwnershipSource:
+      type: string
+      enum:
+        - MINT
+        - TRANSFER
+    Ownership:
+      type: object
+      properties:
+        id:
+          $ref: "#/components/schemas/OwnershipId"
+        tokenId:
+          $ref: "#/components/schemas/TokenId"
+        contract:
+          $ref: '#/components/schemas/MoveModuleId'
+        collection:
+          $ref: "#/components/schemas/CollectionId"
+        owner:
+          $ref: "#/components/schemas/Address"
+        value:
+          type: integer
+          description: the number of the tokens in this ownership
+        source:
+          $ref: "#/components/schemas/OwnershipSource"
+        createdAt:
+          type: string
+          format: "date-time"
+        creator:
+          $ref: "#/components/schemas/Address"
+    Ownerships:
+      title: Ownerships
+      type: object
+      properties:
+        ownership:
+          type: array
+          items:
+            $ref: "#/components/schemas/Ownership"
+    MintActivity:
+      type: object
+      properties:
+        "@type":
+          type: string
+          enum:
+            - MINT
+        creator:
+          $ref: "#/components/schemas/Address"
+        contract:
+          $ref: '#/components/schemas/MoveModuleId'
+        tokenId:
+          $ref: "#/components/schemas/TokenId"
+        value:
+          type: integer
+        transactionHash:
+          $ref: "#/components/schemas/HexEncodedBytes"
+    ActivityId:
+      $ref: "#/components/schemas/EventKey"
+    UserActivityType:
+      type: string
+      enum:
+        - TRANSFER_FROM
+        - TRANSFER_TO
+        - MINT
+        - BURN
+        - MAKE_BID
+        - GET_BID
+        - LIST
+        - BUY
+        - SELL
+        - CANCEL_LIST
+        - CANCEL_BID
+        - AUCTION_BID
+        - AUCTION_CREATED
+        - AUCTION_CANCEL
+        - AUCTION_FINISHED
+        - AUCTION_STARTED
+        - AUCTION_ENDED
+    Activity:
+      type: object
+      properties:
+        id:
+          $ref: "#/components/schemas/ActivityId"
+        date:
+          type: string
+          format: "date-time"
+        lastUpdatedAt:
+          type: string
+          format: "date-time"
+      oneOf:
+        - $ref: "#/components/schemas/MintActivity"
+    ActivitySort:
+      type: string
+      enum:
+        - LATEST_FIRST
+        - EARLIEST_FIRST

@@ -1,0 +1,84 @@
+{
+  "type": "user_transaction",
+  "version": "2",
+  "hash": "",
+  "state_root_hash": "",
+  "event_root_hash": "",
+  "gas_used": "1",
+  "success": false,
+  "vm_status": "Transaction Executed and Committed with Error CODE_DESERIALIZATION_ERROR",
+  "accumulator_root_hash": "",
+  "changes": [
+    {
+      "type": "write_resource",
+      "address": "0xa550c18",
+      "state_key_hash": "",
+      "data": {
+        "type": "0x1::Account::Account",
+        "data": {
+          "authentication_key": "0x7deeccb1080854f499ec8b4c1b213b82c5e34b925cf6875fec02d4b77adbd2d6",
+          "self_address": "0xa550c18",
+          "sequence_number": "1"
+        }
+      }
+    },
+    {
+      "type": "write_resource",
+      "address": "0xa550c18",
+      "state_key_hash": "",
+      "data": {
+        "type": "0x1::Coin::CoinStore<0x1::TestCoin::TestCoin>",
+        "data": {
+          "coin": {
+            "value": "18446744073709551614"
+          },
+          "deposit_events": {
+            "counter": "1",
+            "guid": {
+              "guid": {
+                "id": {
+                  "addr": "0xa550c18",
+                  "creation_num": "1"
+                }
+              },
+              "len_bytes": 40
+            }
+          },
+          "withdraw_events": {
+            "counter": "1",
+            "guid": {
+              "guid": {
+                "id": {
+                  "addr": "0xa550c18",
+                  "creation_num": "2"
+                }
+              },
+              "len_bytes": 40
+            }
+          }
+        }
+      }
+    }
+  ],
+  "sender": "0xa550c18",
+  "sequence_number": "0",
+  "max_gas_amount": "2000",
+  "gas_unit_price": "0",
+  "expiration_timestamp_secs": "18446744073709551615",
+  "payload": {
+    "type": "script_payload",
+    "code": {
+      "bytecode": "0xa11ceb0b030000",
+      "abi": null
+    },
+    "type_arguments": [],
+    "arguments": []
+  },
+  "signature": {
+    "type": "ed25519_signature",
+    "public_key": "0xb9c6ee1630ef3e711144a648db06bbb2284f7274cfbee53ffcee503cc1a49200",
+    "signature": "0x5016020ee5f52af06f70ccc11a2691e2e32326fa543f51f01aae498090b70eedc042e14f97211390185b1f7f90896cabf80eef9f46994b75f94030adb3faae09"
+  },
+  "events": [],
+  "timestamp": "1"
+}
