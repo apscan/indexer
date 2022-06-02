@@ -20,7 +20,7 @@ validator:
       memory: 6.5Gi
   storage:
     class:
-    size: 350Gi
+    size: 500Gi
   rust_log: info
   rust_log_remote: debug,hyper=off
   nodeSelector: {}
@@ -146,7 +146,7 @@ fullnode:
       memory: 6.5Gi
   storage:
     class:
-    size: 350Gi
+    size: 500Gi
   rust_log: info
   rust_log_remote: debug,hyper=off
   nodeSelector: {}
