@@ -94,7 +94,6 @@ impl LedgerPruner {
     pub(in crate::pruner) fn new(
         db: Arc<DB>,
         transaction_store: Arc<TransactionStore>,
-        event_store: Arc<EventStore>,
         ledger_store: Arc<LedgerStore>,
     ) -> Self {
         let pruner = LedgerPruner {
@@ -105,7 +104,7 @@ impl LedgerPruner {
             transaction_store_pruner: Arc::new(TransactionStorePruner::new(
                 transaction_store.clone(),
             )),
-            event_store_pruner: Arc::new(EventStorePruner::new(event_store)),
+            event_store_pruner: Arc::new(EventStorePruner::new(db)),
             write_set_pruner: Arc::new(WriteSetPruner::new(transaction_store)),
         };
         pruner.initialize();

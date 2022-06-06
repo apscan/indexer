@@ -28,7 +28,6 @@ pub fn create_db_pruners(
         Mutex::new(Arc::new(LedgerPruner::new(
             Arc::clone(&ledger_db),
             Arc::new(TransactionStore::new(Arc::clone(&ledger_db))),
-            Arc::new(EventStore::new(Arc::clone(&ledger_db))),
             Arc::new(LedgerStore::new(Arc::clone(&ledger_db))),
         ))),
     ]

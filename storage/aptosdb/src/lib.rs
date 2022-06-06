@@ -271,13 +271,22 @@ impl Drop for RocksdbPropertyReporter {
 pub struct AptosDB {
     ledger_db: Arc<DB>,
     state_merkle_db: Arc<DB>,
-    event_store: Arc<EventStore>,
     ledger_store: Arc<LedgerStore>,
     state_store: Arc<StateStore>,
     system_store: Arc<SystemStore>,
     transaction_store: Arc<TransactionStore>,
     pruner: Option<Pruner>,
     _rocksdb_property_reporter: RocksdbPropertyReporter,
+}
+
+pub struct LedgerDb {
+    ledger_db: Arc<DB>,
+}
+
+impl EventStore for LedgerDb {
+    fn db(&self) -> DB {
+        self.ledger_db
+    }
 }
 
 impl AptosDB {
@@ -291,7 +300,6 @@ impl AptosDB {
         AptosDB {
             ledger_db: Arc::clone(&arc_ledger_rocksdb),
             state_merkle_db: Arc::clone(&arc_state_merkle_rocksdb),
-            event_store: Arc::new(EventStore::new(Arc::clone(&arc_ledger_rocksdb))),
             ledger_store: Arc::new(LedgerStore::new(Arc::clone(&arc_ledger_rocksdb))),
             state_store: Arc::new(StateStore::new(
                 Arc::clone(&arc_ledger_rocksdb),
@@ -509,7 +517,7 @@ impl AptosDB {
 
         // If events were requested, also fetch those.
         let events = if fetch_events {
-            Some(self.event_store.get_events_by_version(version)?)
+            Some(self.get_events_by_version(version)?)
         } else {
             None
         };
@@ -553,7 +561,6 @@ impl AptosDB {
             Arc::clone(&self.ledger_store),
             Arc::clone(&self.transaction_store),
             Arc::clone(&self.state_store),
-            Arc::clone(&self.event_store),
         )
     }
 
@@ -588,8 +595,7 @@ impl AptosDB {
         let cursor = if get_latest {
             // Caller wants the latest, figure out the latest seq_num.
             // In the case of no events on that path, use 0 and expect empty result below.
-            self.event_store
-                .get_latest_sequence_number(ledger_version, event_key)?
+            self.get_latest_sequence_number(ledger_version, event_key)?
                 .unwrap_or(0)
         } else {
             start_seq_num
@@ -599,12 +605,8 @@ impl AptosDB {
         let (first_seq, real_limit) = get_first_seq_num_and_limit(order, cursor, limit)?;
 
         // Query the index.
-        let mut event_indices = self.event_store.lookup_events_by_key(
-            event_key,
-            first_seq,
-            real_limit,
-            ledger_version,
-        )?;
+        let mut event_indices =
+            self.lookup_events_by_key(event_key, first_seq, real_limit, ledger_version)?;
 
         // When descending, it's possible that user is asking for something beyond the latest
         // sequence number, in which case we will consider it a bad request and return an empty
@@ -623,7 +625,7 @@ impl AptosDB {
         let mut events_with_version = event_indices
             .into_iter()
             .map(|(seq, ver, idx)| {
-                let event = self.event_store.get_event_by_version_and_index(ver, idx)?;
+                let event = self.get_event_by_version_and_index(ver, idx)?;
                 ensure!(
                     seq == event.sequence_number(),
                     "Index broken, expected seq:{}, actual:{}",
@@ -713,9 +715,7 @@ impl AptosDB {
                 .with_label_values(&["save_transactions_events"])
                 .start_timer();
             zip_eq(first_version..=last_version, txns_to_commit)
-                .map(|(ver, txn_to_commit)| {
-                    self.event_store.put_events(ver, txn_to_commit.events(), cs)
-                })
+                .map(|(ver, txn_to_commit)| self.put_events(ver, txn_to_commit.events(), cs))
                 .collect::<Result<Vec<_>>>()?;
         }
 
@@ -914,7 +914,7 @@ impl DbReader for AptosDB {
             let events = if fetch_events {
                 Some(
                     (start_version..start_version + limit)
-                        .map(|version| self.event_store.get_events_by_version(version))
+                        .map(|version| self.get_events_by_version(version))
                         .collect::<Result<Vec<_>>>()?,
                 )
             } else {
@@ -993,7 +993,7 @@ impl DbReader for AptosDB {
             let (txn_infos, txns_and_outputs) = (start_version..start_version + limit)
                 .map(|version| {
                     let txn_info = self.ledger_store.get_transaction_info(version)?;
-                    let events = self.event_store.get_events_by_version(version)?;
+                    let events = self.get_events_by_version(version)?;
                     let write_set = self.transaction_store.get_write_set(version)?;
                     let txn = self.transaction_store.get_transaction(version)?;
                     let txn_output = TransactionOutput::new(
@@ -1181,17 +1181,6 @@ impl DbReader for AptosDB {
                 None => 0,
             };
             Ok(ts)
-        })
-    }
-
-    fn get_last_version_before_timestamp(
-        &self,
-        timestamp: u64,
-        ledger_version: Version,
-    ) -> Result<Version> {
-        gauged_api("get_last_version_before_timestamp", || {
-            self.event_store
-                .get_last_version_before_timestamp(timestamp, ledger_version)
         })
     }
 
@@ -1433,7 +1422,6 @@ impl DbWriter for AptosDB {
                 self.ledger_db.clone(),
                 self.ledger_store.clone(),
                 self.transaction_store.clone(),
-                self.event_store.clone(),
                 version,
                 &transactions,
                 &transaction_infos,
@@ -1495,7 +1483,6 @@ impl GetRestoreHandler for Arc<AptosDB> {
             Arc::clone(&self.ledger_store),
             Arc::clone(&self.transaction_store),
             Arc::clone(&self.state_store),
-            Arc::clone(&self.event_store),
         )
     }
 }

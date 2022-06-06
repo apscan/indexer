@@ -1,11 +1,12 @@
 // Copyright (c) Aptos
 // SPDX-License-Identifier: Apache-2.0
-use crate::{pruner::db_sub_pruner::DBSubPruner, EventStore};
+
+use crate::{event_store::EventStore, pruner::db_sub_pruner::DBSubPruner, AptosDB};
 use schemadb::SchemaBatch;
 use std::sync::Arc;
 
 pub struct EventStorePruner {
-    event_store: Arc<EventStore>,
+    db: Arc<AptosDB>,
 }
 
 impl DBSubPruner for EventStorePruner {
@@ -15,14 +16,14 @@ impl DBSubPruner for EventStorePruner {
         min_readable_version: u64,
         target_version: u64,
     ) -> anyhow::Result<()> {
-        self.event_store
+        self.db
             .prune_events(min_readable_version, target_version, db_batch)?;
         Ok(())
     }
 }
 
 impl EventStorePruner {
-    pub(in crate::pruner) fn new(event_store: Arc<EventStore>) -> Self {
-        EventStorePruner { event_store }
+    pub(in crate::pruner) fn new(db: Arc<AptosDB>) -> Self {
+        EventStorePruner { db }
     }
 }

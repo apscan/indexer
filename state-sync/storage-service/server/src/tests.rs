@@ -1473,12 +1473,6 @@ mock! {
 
         fn get_block_timestamp(&self, version: u64) -> Result<u64>;
 
-        fn get_last_version_before_timestamp(
-            &self,
-            _timestamp: u64,
-            _ledger_version: Version,
-        ) -> Result<Version>;
-
         fn get_latest_state_value(&self, state_key: StateKey) -> Result<Option<StateValue>>;
 
         fn get_latest_ledger_info_option(&self) -> Result<Option<LedgerInfoWithSignatures>>;

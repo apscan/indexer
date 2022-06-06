@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    backup::restore_utils, event_store::EventStore, ledger_store::LedgerStore,
-    state_store::StateStore, transaction_store::TransactionStore, AptosDB,
+    backup::restore_utils, ledger_store::LedgerStore, state_store::StateStore,
+    transaction_store::TransactionStore, AptosDB,
 };
 use anyhow::Result;
 use aptos_crypto::{hash::SPARSE_MERKLE_PLACEHOLDER_HASH, HashValue};
@@ -27,7 +27,6 @@ pub struct RestoreHandler {
     ledger_store: Arc<LedgerStore>,
     transaction_store: Arc<TransactionStore>,
     state_store: Arc<StateStore>,
-    event_store: Arc<EventStore>,
 }
 
 impl RestoreHandler {
@@ -37,7 +36,6 @@ impl RestoreHandler {
         ledger_store: Arc<LedgerStore>,
         transaction_store: Arc<TransactionStore>,
         state_store: Arc<StateStore>,
-        event_store: Arc<EventStore>,
     ) -> Self {
         Self {
             ledger_db,
@@ -45,7 +43,6 @@ impl RestoreHandler {
             ledger_store,
             transaction_store,
             state_store,
-            event_store,
         }
     }
 
@@ -92,7 +89,6 @@ impl RestoreHandler {
             self.ledger_db.clone(),
             self.ledger_store.clone(),
             self.transaction_store.clone(),
-            self.event_store.clone(),
             first_version,
             txns,
             txn_infos,

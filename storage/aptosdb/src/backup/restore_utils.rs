@@ -5,7 +5,7 @@
 ///! database restore operations, as required by db-restore and
 ///! state sync v2.
 use crate::{
-    change_set::ChangeSet, event_store::EventStore, ledger_store::LedgerStore,
+    change_set::ChangeSet, ledger_store::LedgerStore,
     schema::transaction_accumulator::TransactionAccumulatorSchema,
     transaction_store::TransactionStore,
 };
@@ -84,7 +84,6 @@ pub fn save_transactions(
     db: Arc<DB>,
     ledger_store: Arc<LedgerStore>,
     transaction_store: Arc<TransactionStore>,
-    event_store: Arc<EventStore>,
     first_version: Version,
     txns: &[Transaction],
     txn_infos: &[TransactionInfo],
@@ -95,7 +94,7 @@ pub fn save_transactions(
         transaction_store.put_transaction(first_version + idx as Version, txn, &mut cs)?;
     }
     ledger_store.put_transaction_infos(first_version, txn_infos, &mut cs)?;
-    event_store.put_events_multiple_versions(first_version, events, &mut cs)?;
+    // event_store.put_events_multiple_versions(first_version, events, &mut cs)?;
 
     db.write_schemas(cs.batch)
 }

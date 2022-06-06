@@ -315,17 +315,6 @@ pub trait DbReader: Send + Sync {
         unimplemented!()
     }
 
-    /// Gets the version of the last transaction committed before timestamp,
-    /// a committed block at or after the required timestamp must exist (otherwise it's possible
-    /// the next block committed as a timestamp smaller than the one in the request).
-    fn get_last_version_before_timestamp(
-        &self,
-        _timestamp: u64,
-        _ledger_version: Version,
-    ) -> Result<Version> {
-        unimplemented!()
-    }
-
     /// See [AptosDB::get_latest_account_state].
     ///
     /// [AptosDB::get_latest_account_state]:

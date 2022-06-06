@@ -34,23 +34,18 @@ use std::{
     sync::Arc,
 };
 
-#[derive(Debug)]
-pub struct EventStore {
-    db: Arc<DB>,
-}
-
-impl EventStore {
-    pub fn new(db: Arc<DB>) -> Self {
-        Self { db }
+pub trait EventStore {
+    fn db(&self) -> DB {
+        unimplemented!()
     }
 
     /// Get all of the events given a transaction version.
     /// We don't need a proof for this because it's only used to get all events
     /// for a version which can be proved from the root hash of the event tree.
-    pub fn get_events_by_version(&self, version: Version) -> Result<Vec<ContractEvent>> {
+    fn get_events_by_version(&self, version: Version) -> Result<Vec<ContractEvent>> {
         let mut events = vec![];
 
-        let mut iter = self.db.iter::<EventSchema>(ReadOptions::default())?;
+        let mut iter = self.db().iter::<EventSchema>(ReadOptions::default())?;
         // Grab the first event and then iterate until we get all events for this version.
         iter.seek(&version)?;
         while let Some(((ver, index), event)) = iter.next().transpose()? {
@@ -63,12 +58,12 @@ impl EventStore {
         Ok(events)
     }
 
-    pub fn get_events_by_version_iter(
+    fn get_events_by_version_iter(
         &self,
         start_version: Version,
         num_versions: usize,
     ) -> Result<EventsByVersionIter> {
-        let mut iter = self.db.iter::<EventSchema>(Default::default())?;
+        let mut iter = self.db().iter::<EventSchema>(Default::default())?;
         iter.seek(&start_version)?;
 
         Ok(EventsByVersionIter {
@@ -80,27 +75,27 @@ impl EventStore {
         })
     }
 
-    pub fn get_event_by_version_and_index(
+    fn get_event_by_version_and_index(
         &self,
         version: Version,
         index: u64,
     ) -> Result<ContractEvent> {
-        self.db
+        self.db()
             .get::<EventSchema>(&(version, index))?
             .ok_or_else(|| {
                 AptosDbError::NotFound(format!("Event {} of Txn {}", index, version)).into()
             })
     }
 
-    pub fn get_txn_ver_by_seq_num(&self, event_key: &EventKey, seq_num: u64) -> Result<u64> {
+    fn get_txn_ver_by_seq_num(&self, event_key: &EventKey, seq_num: u64) -> Result<u64> {
         let (ver, _) = self
-            .db
+            .db()
             .get::<EventByKeySchema>(&(*event_key, seq_num))?
             .ok_or_else(|| format_err!("Index entry should exist for seq_num {}", seq_num))?;
         Ok(ver)
     }
 
-    pub fn get_event_by_key(
+    fn get_event_by_key(
         &self,
         event_key: &EventKey,
         seq_num: u64,
@@ -112,13 +107,13 @@ impl EventStore {
 
     /// Get the latest sequence number on `event_key` considering all transactions with versions
     /// no greater than `ledger_version`.
-    pub fn get_latest_sequence_number(
+    fn get_latest_sequence_number(
         &self,
         ledger_version: Version,
         event_key: &EventKey,
     ) -> Result<Option<u64>> {
         let mut iter = self
-            .db
+            .db()
             .iter::<EventByVersionSchema>(ReadOptions::default())?;
         iter.seek_for_prev(&(*event_key, ledger_version, u64::max_value()));
 
@@ -129,7 +124,7 @@ impl EventStore {
 
     /// Get the next sequence number for specified event key.
     /// Returns 0 if there's no events already in the event stream.
-    pub fn get_next_sequence_number(
+    fn get_next_sequence_number(
         &self,
         ledger_version: Version,
         event_key: &EventKey,
@@ -144,7 +139,7 @@ impl EventStore {
     /// Given `event_key` and `start_seq_num`, returns events identified by transaction version and
     /// index among all events emitted by the same transaction. Result won't contain records with a
     /// transaction version > `ledger_version` and is in ascending order.
-    pub fn lookup_events_by_key(
+    fn lookup_events_by_key(
         &self,
         event_key: &EventKey,
         start_seq_num: u64,
@@ -157,7 +152,7 @@ impl EventStore {
             u64,     // index among events for the same transaction
         )>,
     > {
-        let mut iter = self.db.iter::<EventByKeySchema>(ReadOptions::default())?;
+        let mut iter = self.db().iter::<EventByKeySchema>(ReadOptions::default())?;
         iter.seek(&(*event_key, start_seq_num))?;
 
         let mut result = Vec::new();
@@ -201,7 +196,7 @@ impl EventStore {
 
     /// Save contract events yielded by the transaction at `version` and return root hash of the
     /// event accumulator formed by these events.
-    pub fn put_events(
+    fn put_events(
         &self,
         version: u64,
         events: &[ContractEvent],
@@ -238,7 +233,7 @@ impl EventStore {
         Ok(root_hash)
     }
 
-    pub(crate) fn put_events_multiple_versions(
+    fn put_events_multiple_versions(
         &self,
         first_version: u64,
         event_vecs: &[Vec<ContractEvent>],
@@ -299,43 +294,8 @@ impl EventStore {
         }
     }
 
-    /// Gets the version of the last transaction committed before timestamp,
-    /// a commited block at or after the required timestamp must exist (otherwise it's possible
-    /// the next block committed as a timestamp smaller than the one in the request).
-    pub(crate) fn get_last_version_before_timestamp(
-        &self,
-        timestamp: u64,
-        ledger_version: Version,
-    ) -> Result<Version> {
-        let event_key = new_block_event_key();
-        let seq_at_or_after_ts = self.search_for_event_lower_bound(
-            &event_key,
-            |event| {
-                let new_block_event: NewBlockEvent = event.try_into()?;
-                Ok(new_block_event.proposed_time() < timestamp)
-            },
-            ledger_version,
-        )?.ok_or_else(|| format_err!(
-            "No new block found beyond timestmap {}, so can't determine the last version before it.",
-            timestamp,
-        ))?;
-
-        ensure!(
-            seq_at_or_after_ts > 0,
-            "First block started at or after timestamp {}.",
-            timestamp,
-        );
-
-        let (version, _idx) =
-            self.lookup_event_by_key(&event_key, seq_at_or_after_ts, ledger_version)?;
-
-        version
-            .checked_sub(1)
-            .ok_or_else(|| format_err!("A block with non-zero seq num started at version 0."))
-    }
-
     /// Prunes the events by key store for a set of events
-    pub fn prune_events_by_key(
+    fn prune_events_by_key(
         &self,
         candidate_events: &[ContractEvent],
         db_batch: &mut SchemaBatch,
@@ -370,7 +330,9 @@ impl EventStore {
         end: Version,
         db_batch: &mut SchemaBatch,
     ) -> anyhow::Result<()> {
-        let mut iter = self.db.iter::<EventAccumulatorSchema>(Default::default())?;
+        let mut iter = self
+            .db()
+            .iter::<EventAccumulatorSchema>(Default::default())?;
         iter.seek(&(begin, Position::from_inorder_index(0)))?;
         while let Some(((version, position), _)) = iter.next().transpose()? {
             if version >= end {
@@ -382,7 +344,7 @@ impl EventStore {
     }
 
     /// Prune a set of candidate events in the range of version in [begin, end) and all related indices
-    pub fn prune_events(
+    fn prune_events(
         &self,
         start: Version,
         end: Version,
@@ -405,7 +367,7 @@ impl EventStore {
         Ok(())
     }
 
-    pub fn prune_events_by_version(
+    fn prune_events_by_version(
         &self,
         event_keys: HashSet<EventKey>,
         begin: Version,
@@ -420,7 +382,7 @@ impl EventStore {
     }
 
     /// Prunes the event schema for a range of version in [begin, end)
-    pub fn prune_event_schema(
+    fn prune_event_schema(
         &self,
         begin: Version,
         end: Version,
@@ -430,23 +392,30 @@ impl EventStore {
     }
 }
 
-type Accumulator<'a> = MerkleAccumulator<EventHashReader<'a>, EventAccumulatorHasher>;
+type Accumulator<'a, T: EventStore> =
+    MerkleAccumulator<EventHashReader<'a, T>, EventAccumulatorHasher>;
 
-struct EventHashReader<'a> {
-    store: &'a EventStore,
+struct EventHashReader<'a, T: EventStore> {
+    store: &'a T,
     version: Version,
 }
 
-impl<'a> EventHashReader<'a> {
-    fn new(store: &'a EventStore, version: Version) -> Self {
+impl<'a, T> EventHashReader<'a, T>
+where
+    T: EventStore,
+{
+    fn new(store: &'a T, version: Version) -> Self {
         Self { store, version }
     }
 }
 
-impl<'a> HashReader for EventHashReader<'a> {
+impl<'a, T> HashReader for EventHashReader<'a, T>
+where
+    T: EventStore,
+{
     fn get(&self, position: Position) -> Result<HashValue> {
         self.store
-            .db
+            .db()
             .get::<EventAccumulatorSchema>(&(self.version, position))?
             .ok_or_else(|| format_err!("Hash at position {:?} not found.", position))
     }

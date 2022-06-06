@@ -10,6 +10,7 @@ use crate::{
     },
     state_store::StateStore,
     transaction_store::TransactionStore,
+    AptosDB,
 };
 use anyhow::{ensure, Result};
 use aptos_crypto::hash::HashValue;
@@ -27,24 +28,24 @@ use std::{fmt, sync::Arc};
 /// `BackupHandler` provides functionalities for AptosDB data backup.
 #[derive(Clone)]
 pub struct BackupHandler {
+    db: Arc<AptosDB>,
     ledger_store: Arc<LedgerStore>,
     transaction_store: Arc<TransactionStore>,
     state_store: Arc<StateStore>,
-    event_store: Arc<EventStore>,
 }
 
 impl BackupHandler {
     pub(crate) fn new(
+        db: Arc<AptosDB>,
         ledger_store: Arc<LedgerStore>,
         transaction_store: Arc<TransactionStore>,
         state_store: Arc<StateStore>,
-        event_store: Arc<EventStore>,
     ) -> Self {
         Self {
+            db,
             ledger_store,
             transaction_store,
             state_store,
-            event_store,
         }
     }
 
@@ -62,7 +63,7 @@ impl BackupHandler {
             .ledger_store
             .get_transaction_info_iter(start_version, num_transactions)?;
         let events_iter = self
-            .event_store
+            .db
             .get_events_by_version_iter(start_version, num_transactions)?;
 
         let zipped = zip_eq(zip_eq(txn_iter, txn_info_iter), events_iter)
