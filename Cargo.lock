@@ -277,7 +277,6 @@ dependencies = [
 name = "aptos-crypto"
 version = "0.0.3"
 dependencies = [
- "aes-gcm",
  "anyhow",
  "aptos-crypto-derive",
  "aptos-workspace-hack",
@@ -299,6 +298,7 @@ dependencies = [
  "proptest-derive",
  "rand 0.7.3",
  "rand_core 0.5.1",
+ "ring",
  "ripemd160",
  "serde 1.0.137",
  "serde-name",

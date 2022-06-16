@@ -10,7 +10,6 @@ publish = ["crates-io"]
 edition = "2018"
 
 [dependencies]
-aes-gcm = "0.9.4"
 anyhow = "1.0.57"
 bcs = "0.1.3"
 blst = "0.3.7"
@@ -27,6 +26,7 @@ proptest = { version = "1.0.0", optional = true }
 proptest-derive = { version = "0.3.0", optional = true }
 rand = "0.7.3"
 rand_core = { version = "0.5.1", default-features = false }
+ring = { version = "0.16.20", features = ["std"] }
 serde = { version = "1.0.137", features = ["derive"] }
 serde-name = "0.1.1"
 serde_bytes = "0.11.6"
@@ -58,10 +58,6 @@ fuzzing = ["proptest", "proptest-derive", "cloneable-private-keys"]
 
 [[bench]]
 name = "noise"
-harness = false
-
-[[bench]]
-name = "noise_hmac_only"
 harness = false
 
 [[bench]]
