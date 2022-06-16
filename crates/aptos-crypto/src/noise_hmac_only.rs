@@ -1,67 +1,14 @@
 // Copyright (c) Aptos
 // SPDX-License-Identifier: Apache-2.0
 
-//! Noise is a [protocol framework](https://noiseprotocol.org/) which we use to
-//! encrypt and authenticate communications between nodes of the network.
-//!
-//! This file implements a stripped-down version of Noise_IK_25519_AESGCM_SHA256.
-//! This means that only the parts that we care about (the IK handshake) are implemented.
-//!
-//! Note that to benefit from hardware support for AES, you must build this crate with the following
-//! flags: `RUSTFLAGS="-Ctarget-cpu=skylake -Ctarget-feature=+aes,+sse2,+sse4.1,+ssse3"`.
-//!
-//! Note that using `RUSTFLAGS="-Ctarget-feature=+aes"` does not improve performance on Apple M1.
-//!
-//! Usage example:
-//!
-//! ```
-//! use aptos_crypto::{noise, x25519, traits::*};
-//! use rand::prelude::*;
-//!
-//! # fn main() -> Result<(), aptos_crypto::noise::NoiseError> {
-//! let mut rng = rand::thread_rng();
-//! let initiator_static = x25519::PrivateKey::generate(&mut rng);
-//! let responder_static = x25519::PrivateKey::generate(&mut rng);
-//! let responder_public = responder_static.public_key();
-//!
-//! let initiator = noise::NoiseConfig::new(initiator_static);
-//! let responder = noise::NoiseConfig::new(responder_static);
-//!
-//! let payload1 = b"the client can send an optional payload in the first message";
-//! let mut buffer = vec![0u8; noise::handshake_init_msg_len(payload1.len())];
-//! let initiator_state = initiator
-//!   .initiate_connection(&mut rng, b"prologue", responder_public, Some(payload1), &mut buffer)?;
-//!
-//! let payload2 = b"the server can send an optional payload as well as part of the handshake";
-//! let mut buffer2 = vec![0u8; noise::handshake_resp_msg_len(payload2.len())];
-//! let (received_payload, mut responder_session) = responder
-//!   .respond_to_client_and_finalize(&mut rng, b"prologue", &buffer, Some(payload2), &mut buffer2)?;
-//! assert_eq!(received_payload.as_slice(), &payload1[..]);
-//!
-//! let (received_payload, mut initiator_session) = initiator
-//!   .finalize_connection(initiator_state, &buffer2)?;
-//! assert_eq!(received_payload.as_slice(), &payload2[..]);
-//!
-//! let message_sent = b"hello world".to_vec();
-//! let mut buffer = message_sent.clone();
-//! let auth_tag = initiator_session
-//!   .write_message_in_place(&mut buffer)?;
-//! buffer.extend_from_slice(&auth_tag);
-//!
-//! let received_message = responder_session
-//!   .read_message_in_place(&mut buffer)?;
-//!
-//! assert_eq!(received_message, message_sent.as_slice());
-//!
-//! # Ok(())
-//! # }
-//! ```
+//! This is a modification of `noise.rs` which instead of encrypting & authenticating messages, it
+//! only authenticates messages using HMAC.
 //!
 #![allow(clippy::integer_arithmetic)]
 
 use crate::{hash::HashValue, hkdf::Hkdf, traits::Uniform as _, x25519};
 use aes_gcm::{
-    aead::{generic_array::GenericArray, Aead, AeadInPlace, NewAead, Payload},
+    aead::{generic_array::GenericArray, Aead, NewAead, Payload},
     Aes256Gcm,
 };
 use sha2::Digest;
@@ -69,7 +16,12 @@ use std::{
     convert::TryFrom as _,
     io::{Cursor, Read as _, Write as _},
 };
+use hmac::{Mac, Hmac, NewMac};
 use thiserror::Error;
+use crate::compat::Sha3_256;
+
+/// The type of HMAC we use
+type HmacType = Hmac<Sha3_256>;
 
 //
 // Useful constants
@@ -81,6 +33,9 @@ pub const MAX_SIZE_NOISE_MSG: usize = 65535;
 
 /// The authentication tag length of AES-GCM.
 pub const AES_GCM_TAGLEN: usize = 16;
+
+/// The authentication tag length of HMAC.
+pub const HMAC_TAGLEN: usize = 32;
 
 /// The only Noise handshake protocol that we implement in this file.
 const PROTOCOL_NAME: &[u8] = b"Noise_IK_25519_AESGCM_SHA256\0\0\0\0";
@@ -640,26 +595,26 @@ impl NoiseSession {
         self.remote_public_key
     }
 
-    /// encrypts a message for the other peers (post-handshake)
-    /// the function encrypts in place, and returns the authentication tag as result
-    pub fn write_message_in_place(&mut self, message: &mut [u8]) -> Result<Vec<u8>, NoiseError> {
+    /// MACs a message for the other peers (post-handshake).
+    /// The function returns the MAC tag as Result.
+    pub fn write_message_in_place(&mut self, message: &[u8]) -> Result<Vec<u8>, NoiseError> {
         // checks
         if !self.valid {
             return Err(NoiseError::SessionClosed);
         }
-        if message.len() > MAX_SIZE_NOISE_MSG - AES_GCM_TAGLEN {
+        if message.len() > MAX_SIZE_NOISE_MSG - HMAC_TAGLEN {
             return Err(NoiseError::PayloadTooLarge);
         }
 
-        // encrypt in place
-        let aead = Aes256Gcm::new(GenericArray::from_slice(&self.write_key));
         let mut nonce = [0u8; 4].to_vec();
         nonce.extend_from_slice(&self.write_nonce.to_be_bytes());
-        let nonce = GenericArray::from_slice(&nonce);
 
-        let authentication_tag = aead
-            .encrypt_in_place_detached(nonce, b"", message)
-            .map_err(|_| NoiseError::Encrypt)?;
+        // MAC the nonce and the message
+        let mut hmac = HmacType::new_from_slice(&self.write_key[..]).unwrap();
+        hmac.update(&nonce[..]);
+        hmac.update(message);
+        let hmac_tag = hmac.finalize().into_bytes().to_vec();
+        assert_eq!(hmac_tag.len(), HMAC_TAGLEN);
 
         // increment nonce
         self.write_nonce = self
@@ -667,12 +622,12 @@ impl NoiseSession {
             .checked_add(1)
             .ok_or(NoiseError::NonceOverflow)?;
 
-        // return a subslice without the authentication tag
-        Ok(authentication_tag.to_vec())
+        // return message and tag
+        Ok(hmac_tag)
     }
 
-    /// decrypts a message from the other peer (post-handshake)
-    /// the function decrypts in place, and returns a subslice without the auth tag
+    /// Checks the MAC on a message from the other peer (post-handshake), where message =
+    /// (actual_message | MAC). The function returns the message without the MAC.
     pub fn read_message_in_place<'a>(
         &mut self,
         message: &'a mut [u8],
@@ -685,25 +640,27 @@ impl NoiseSession {
             self.valid = false;
             return Err(NoiseError::ReceivedMsgTooLarge);
         }
-        if message.len() < AES_GCM_TAGLEN {
+        if message.len() < HMAC_TAGLEN {
             self.valid = false;
             return Err(NoiseError::ResponseBufferTooSmall);
         }
 
-        // decrypt in place
-        let aead = Aes256Gcm::new(GenericArray::from_slice(&self.read_key));
-
         let mut nonce = [0u8; 4].to_vec();
         nonce.extend_from_slice(&self.read_nonce.to_be_bytes());
-        let nonce = GenericArray::from_slice(&nonce);
 
-        let (buffer, authentication_tag) = message.split_at_mut(message.len() - AES_GCM_TAGLEN);
-        let authentication_tag = GenericArray::from_slice(authentication_tag);
-        aead.decrypt_in_place_detached(nonce, b"", buffer, authentication_tag)
-            .map_err(|_| {
-                self.valid = false;
-                NoiseError::Decrypt
-            })?;
+        // MAC the nonce and the message
+        let (buffer, hmac_tag) = message.split_at_mut(message.len() - HMAC_TAGLEN);
+
+        let mut hmac = HmacType::new_from_slice(&self.read_key[..]).unwrap();
+        hmac.update(&nonce[..]);
+        //hmac.update(&message[..message.len() - HMAC_TAGLEN]);
+        hmac.update(buffer);
+        let expected_hmac_tag = hmac.finalize().into_bytes().to_vec();
+
+        if hmac_tag.to_vec() != expected_hmac_tag {
+            self.valid = false;
+            return Err(NoiseError::Decrypt)
+        }
 
         // increment nonce
         self.read_nonce = self

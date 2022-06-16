@@ -14,7 +14,7 @@ use rand::SeedableRng;
 use std::convert::TryFrom as _;
 
 use aptos_crypto::{
-    noise::{handshake_init_msg_len, handshake_resp_msg_len, NoiseConfig, AES_GCM_TAGLEN},
+    noise_hmac_only::{handshake_init_msg_len, handshake_resp_msg_len, NoiseConfig, HMAC_TAGLEN},
     test_utils::TEST_SEED,
     x25519, Uniform as _, ValidCryptoMaterial as _,
 };
@@ -23,7 +23,7 @@ const MSG_SIZE: usize = 4096;
 
 fn benchmarks(c: &mut Criterion) {
     // bench the handshake
-    let mut group = c.benchmark_group("noise-handshake");
+    let mut group = c.benchmark_group("noise-hmac-handshake");
     group.throughput(Throughput::Elements(1));
     group.bench_function("connect", |b| {
         // setup keys first
@@ -72,10 +72,10 @@ fn benchmarks(c: &mut Criterion) {
     });
     group.finish();
 
-    let mut transport_group = c.benchmark_group("noise-transport");
+    let mut transport_group = c.benchmark_group("noise-hmac-transport");
     transport_group.throughput(Throughput::Bytes(MSG_SIZE as u64 * 2));
-    transport_group.bench_function("AES-GCM throughput", |b| {
-        let mut buffer_msg = [0u8; MSG_SIZE + AES_GCM_TAGLEN];
+    transport_group.bench_function("HMAC throughput", |b| {
+        let mut buffer_msg = [0u8; MSG_SIZE + HMAC_TAGLEN];
 
         // setup keys first
         let mut rng = ::rand::rngs::StdRng::from_seed(TEST_SEED);
@@ -115,13 +115,13 @@ fn benchmarks(c: &mut Criterion) {
         // bench throughput post-handshake
         b.iter(move || {
             let auth_tag = initiator_session
-                .write_message_in_place(&mut buffer_msg[..MSG_SIZE])
+                .write_message_in_place(&buffer_msg[..MSG_SIZE])
                 .expect("session should not be closed");
 
-            buffer_msg[MSG_SIZE..MSG_SIZE + AES_GCM_TAGLEN].copy_from_slice(&auth_tag);
+            buffer_msg[MSG_SIZE..MSG_SIZE + HMAC_TAGLEN].copy_from_slice(&auth_tag);
 
             let _plaintext = responder_session
-                .read_message_in_place(&mut buffer_msg[..MSG_SIZE + AES_GCM_TAGLEN])
+                .read_message_in_place(&mut buffer_msg[..MSG_SIZE + HMAC_TAGLEN])
                 .expect("session should not be closed");
         })
     });

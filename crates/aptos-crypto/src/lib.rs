@@ -13,6 +13,7 @@ pub mod hash;
 pub mod hkdf;
 pub mod multi_ed25519;
 pub mod noise;
+pub mod noise_hmac_only;
 pub mod test_utils;
 pub mod traits;
 pub mod validatable;
