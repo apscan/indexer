@@ -89,9 +89,11 @@ impl GenesisCommitter {
     }
 
     pub fn commit(self) -> Result<()> {
+        let version = self.output.result_view.txn_accumulator().version();
         self.db.save_transactions(
             &self.output.transactions_to_commit()?,
             self.output.result_view.txn_accumulator().version(),
+            version.checked_sub(1),
             self.output.ledger_info.as_ref(),
         )?;
         info!("Genesis commited.");

@@ -1242,6 +1242,7 @@ impl DbWriter for AptosDB {
         jmt_updates: Vec<(HashValue, (HashValue, StateKey))>,
         node_hashes: Option<&HashMap<NibblePath, HashValue>>,
         version: Version,
+        base_version: Option<Version>,
     ) -> Result<()> {
         gauged_api("save_state_snapshot", || {
             let mut cs = ChangeSet::new();
@@ -1251,6 +1252,7 @@ impl DbWriter for AptosDB {
                     vec![jmt_update_refs(&jmt_updates)],
                     node_hashes.map(|hashes| vec![hashes]),
                     version,
+                    base_version,
                     &mut cs,
                 )?
                 .first()
@@ -1269,6 +1271,7 @@ impl DbWriter for AptosDB {
         &self,
         txns_to_commit: &[TransactionToCommit],
         first_version: Version,
+        base_state_version: Option<Version>,
         ledger_info_with_sigs: Option<&LedgerInfoWithSignatures>,
         save_state_snapshots: bool,
     ) -> Result<()> {
@@ -1299,6 +1302,7 @@ impl DbWriter for AptosDB {
                 self.save_transactions_impl(txns_to_commit, first_version, &mut cs)?;
 
             if save_state_snapshots {
+                let mut base_version = base_state_version;
                 // find all the checkpoint versions
                 for (idx, jmt_updates, jf_node_hashes) in txns_to_commit
                     .iter()
@@ -1312,11 +1316,9 @@ impl DbWriter for AptosDB {
                         )
                     })
                 {
-                    self.save_state_snapshot(
-                        jmt_updates,
-                        jf_node_hashes,
-                        first_version + idx as LeafCount,
-                    )?;
+                    let version = first_version + idx as LeafCount;
+                    self.save_state_snapshot(jmt_updates, jf_node_hashes, version, base_version)?;
+                    base_version = Some(version);
                 }
             }
 

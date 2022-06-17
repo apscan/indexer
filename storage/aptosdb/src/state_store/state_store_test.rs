@@ -32,7 +32,13 @@ fn put_value_set(
     let jmt_updates = jmt_updates(&value_set);
 
     let root = state_store
-        .merklize_value_sets(vec![jmt_update_refs(&jmt_updates)], None, version, &mut cs)
+        .merklize_value_sets(
+            vec![jmt_update_refs(&jmt_updates)],
+            None,
+            version,
+            version.checked_sub(1),
+            &mut cs,
+        )
         .unwrap()[0];
     state_store
         .put_value_sets(vec![&value_set], version, &mut cs)
@@ -686,7 +692,13 @@ fn update_store(
         let jmt_updates = jmt_updates(&value_state_set);
         let version = first_version + i as Version;
         let root_hashes = store
-            .merklize_value_sets(vec![jmt_update_refs(&jmt_updates)], None, version, &mut cs)
+            .merklize_value_sets(
+                vec![jmt_update_refs(&jmt_updates)],
+                None,
+                version,
+                version.checked_sub(1),
+                &mut cs,
+            )
             .unwrap();
         store
             .put_value_sets(vec![&value_state_set], version, &mut cs)
