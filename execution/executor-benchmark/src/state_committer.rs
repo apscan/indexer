@@ -84,6 +84,7 @@ impl StateCommitter {
     }
 
     fn commit(&mut self) {
+        let timer = std::time::Instant::now();
         // commit
         info!(
             num_pending_commits = self.num_pending_commits,
@@ -97,6 +98,7 @@ impl StateCommitter {
             .clone()
             .freeze()
             .new_node_hashes_since(&self.committed_smt.clone().freeze());
+        info!(time=timer.elapsed().as_millis() as u64, "ALDEN got hashes.");
         self.db
             .save_state_snapshot(to_commit, Some(&node_hashes), self.version)
             .unwrap();

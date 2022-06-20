@@ -291,6 +291,7 @@ impl StateStore {
         first_version: Version,
         ledger_db_cs: &mut ChangeSet,
     ) -> Result<Vec<HashValue>> {
+        let timer = std::time::Instant::now();
         let (new_root_hash_vec, tree_update_batch) = JellyfishMerkleTree::new(self)
             .batch_put_value_sets(
                 value_sets,
@@ -298,6 +299,10 @@ impl StateStore {
                 self.find_latest_persisted_version_less_than(first_version)?,
                 first_version,
             )?;
+
+        use aptos_logger::info;
+        info!(time=timer.elapsed().as_millis() as u64, "ALDEN JMT updated.");
+        let timer = std::time::Instant::now();
 
         let num_versions = new_root_hash_vec.len();
         assert_eq!(num_versions, tree_update_batch.node_stats.len());
@@ -323,8 +328,13 @@ impl StateStore {
             .map(|row| batch.put::<StaleNodeIndexSchema>(row, &()))
             .collect::<Result<Vec<()>>>()?;
 
+        info!(time=timer.elapsed().as_millis() as u64, "ALDEN misc.");
+        let timer = std::time::Instant::now();
+
         // commit jellyfish merkle nodes
         self.state_merkle_db.write_schemas(batch)?;
+
+        info!(time=timer.elapsed().as_millis() as u64, "ALDEN state committed.");
 
         Ok(new_root_hash_vec)
     }

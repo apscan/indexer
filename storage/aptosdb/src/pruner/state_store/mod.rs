@@ -138,8 +138,8 @@ impl StateStorePruner {
         // this imposes at most one minute of work in vain after restarting.)
         let now = Instant::now();
         if self.min_readable_version.load(Ordering::Relaxed) < self.index_min_nonpurged_version() {
-            warn!("State pruner inconsistent, min_readable_version is {} and  index_min_non-purged_version is {}",
-                self.min_readable_version.load(Ordering::Relaxed), self.index_min_nonpurged_version());
+            // warn!("State pruner inconsistent, min_readable_version is {} and  index_min_non-purged_version is {}",
+            //     self.min_readable_version.load(Ordering::Relaxed), self.index_min_nonpurged_version());
             return Ok(());
         }
 

@@ -121,6 +121,7 @@ fn main() {
             num_accounts,
             init_account_balance,
         } => {
+            aptos_logger::Logger::new().init();
             executor_benchmark::db_generator::run(
                 num_accounts,
                 init_account_balance,

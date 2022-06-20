@@ -4,10 +4,7 @@
 use crate::schema::*;
 use aptos_config::config::RocksdbConfig;
 use aptos_types::transaction::Version;
-use schemadb::{
-    ColumnFamilyDescriptor, ColumnFamilyName, DBCompressionType, Options, SliceTransform,
-    DEFAULT_COLUMN_FAMILY_NAME,
-};
+use schemadb::{ColumnFamilyDescriptor, ColumnFamilyName, DBCompressionType, Options, SliceTransform, DEFAULT_COLUMN_FAMILY_NAME, BlockBasedOptions, Cache};
 
 const VERSION_SIZE: usize = std::mem::size_of::<Version>();
 
@@ -44,6 +41,10 @@ pub(super) fn gen_rocksdb_options(config: &RocksdbConfig) -> Options {
     let mut db_opts = Options::default();
     db_opts.set_max_open_files(config.max_open_files);
     db_opts.set_max_total_wal_size(config.max_total_wal_size);
+    // let mut block_opt = BlockBasedOptions::default();
+    // hack: set 1G block cache
+    // block_opt.set_block_cache(&Cache::new_lru_cache(1024 * 1024).unwrap());
+    // db_opts.set_block_based_table_factory(&block_opt);
     db_opts
 }
 
