@@ -334,20 +334,23 @@ impl AptosDB {
         } else {
             db_opts.create_if_missing(true);
             db_opts.create_missing_column_families(true);
-            (
-                DB::open_cf(
-                    &db_opts,
-                    ledger_db_path.clone(),
-                    "ledger_db",
-                    gen_ledger_cfds(),
-                )?,
-                DB::open_cf(
-                    &db_opts,
-                    state_merkle_db_path.clone(),
-                    "state_merkle_db",
-                    gen_state_merkle_cfds(),
-                )?,
-            )
+
+            db_opts.set_max_open_files(100);
+            let ledger_db = DB::open_cf(
+                &db_opts,
+                ledger_db_path.clone(),
+                "ledger_db",
+                gen_ledger_cfds(),
+            )?;
+            db_opts.set_max_open_files(-1);
+            let state_merkle_db = DB::open_cf(
+                &db_opts,
+                state_merkle_db_path.clone(),
+                "state_merkle_db",
+                gen_state_merkle_cfds(),
+            )?;
+
+            (ledger_db, state_merkle_db)
         };
 
         let ret = Self::new_with_dbs(ledger_db, state_merkle_db, storage_pruner_config);
