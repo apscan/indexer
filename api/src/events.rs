@@ -10,7 +10,7 @@ use crate::{
     param::{AddressParam, EventKeyParam, MoveIdentifierParam, MoveStructTagParam},
 };
 
-use aptos_api_types::{AsConverter, Error, LedgerInfo, Response};
+use aptos_api_types::{AsConverter, Error, LedgerInfo, Response, ResponseBCS};
 
 use anyhow::Result;
 use aptos_types::event::EventKey;
@@ -38,6 +38,18 @@ pub fn get_events_by_event_handle(context: Context) -> BoxedFilter<(impl Reply,)
         .boxed()
 }
 
+pub fn get_events_by_event_handle_bcs(context: Context) -> BoxedFilter<(impl Reply,)> {
+    warp::path!(
+        "bcs" / "accounts" / AddressParam / "events" / MoveStructTagParam / MoveIdentifierParam
+    )
+    .and(warp::get())
+    .and(warp::query::<Page>())
+    .and(context.filter())
+    .and_then(handle_get_events_by_event_handle_bcs)
+    .with(metrics("get_events_by_event_handle_bcs"))
+    .boxed()
+}
+
 async fn handle_get_events_by_event_key(
     event_key: EventKeyParam,
     page: Page,
@@ -58,6 +70,19 @@ async fn handle_get_events_by_event_handle(
     let key =
         Account::new(None, address, context.clone())?.find_event_key(struct_tag, field_name)?;
     Ok(Events::new(key, context)?.list(page)?)
+}
+
+async fn handle_get_events_by_event_handle_bcs(
+    address: AddressParam,
+    struct_tag: MoveStructTagParam,
+    field_name: MoveIdentifierParam,
+    page: Page,
+    context: Context,
+) -> Result<impl Reply, Rejection> {
+    fail_point("endpoint_get_events_by_event_handle")?;
+    let key =
+        Account::new(None, address, context.clone())?.find_event_key(struct_tag, field_name)?;
+    Ok(EventsBCS::new(key, context)?.list(page)?)
 }
 
 struct Events {
@@ -87,5 +112,35 @@ impl Events {
         let resolver = self.context.move_resolver()?;
         let events = resolver.as_converter().try_into_events(&contract_events)?;
         Response::new(self.ledger_info, &events)
+    }
+}
+
+struct EventsBCS {
+    key: EventKey,
+    ledger_info: LedgerInfo,
+    context: Context,
+}
+
+impl EventsBCS {
+    fn new(key: EventKey, context: Context) -> Result<Self, Error> {
+        let ledger_info = context.get_latest_ledger_info()?;
+        Ok(Self {
+            key,
+            ledger_info,
+            context,
+        })
+    }
+
+    pub fn list(self, page: Page) -> Result<impl Reply, Error> {
+        let contract_events = self.context.get_events(
+            &self.key,
+            page.start(0, u64::MAX)?,
+            page.limit()?,
+            self.ledger_info.version(),
+        )?;
+
+        let resolver = self.context.move_resolver()?;
+        let events = resolver.as_converter().try_into_events(&contract_events)?;
+        ResponseBCS::new(self.ledger_info, &events)
     }
 }
