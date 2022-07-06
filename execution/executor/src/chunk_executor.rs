@@ -31,7 +31,10 @@ use executor_types::{
 };
 use fail::fail_point;
 use std::{marker::PhantomData, sync::Arc};
-use storage_interface::{cached_state_view::CachedStateView, DbReaderWriter, ExecutedTrees};
+use storage_interface::{
+    cached_state_view::CachedStateView, sync_proof_fetcher::SyncProofFetcher, DbReaderWriter,
+    ExecutedTrees,
+};
 
 pub struct ChunkExecutor<V> {
     db: DbReaderWriter,
@@ -64,6 +67,7 @@ impl<V> ChunkExecutor<V> {
                 first_version: latest_view.txn_accumulator().num_leaves(),
             },
             Arc::clone(&self.db.reader),
+            Arc::new(SyncProofFetcher::new(Arc::clone(&self.db.reader))),
         )
     }
 

@@ -142,6 +142,7 @@ impl Pruner {
         if latest_version
             >= *self.last_version_sent_to_pruners.as_ref().lock() + self.pruning_batch_size as u64
         {
+            println!("here....");
             self.wake_pruner(latest_version);
             *self.last_version_sent_to_pruners.as_ref().lock() = latest_version;
         }

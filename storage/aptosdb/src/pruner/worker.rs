@@ -52,9 +52,11 @@ impl Worker {
         while self.receive_commands() {
             // Process a reasonably small batch of work before trying to receive commands again,
             // in case `Command::Quit` is received (that's when we should quit.)
+            println!("worker received..............");
             let mut error_in_pruning = false;
             let mut ledger_db_batch = SchemaBatch::new();
             for db_pruner in self.db_pruners.iter().flatten() {
+                println!("{} pruner is working!!", db_pruner.lock().name());
                 let result = db_pruner
                     .lock()
                     .prune(&mut ledger_db_batch, self.max_version_to_prune_per_batch);

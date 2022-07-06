@@ -168,6 +168,7 @@ pub fn prune_state_store(
         .flatten()
         .collect::<Vec<_>>();
 
+    println!("get {} state to delete", indices.len());
     if indices.is_empty() {
         Ok(min_readable_version)
     } else {
@@ -175,7 +176,7 @@ pub fn prune_state_store(
             .with_label_values(&["pruner_commit"])
             .start_timer();
         let new_min_readable_version = indices.last().expect("Should exist.").stale_since_version;
-        let mut batch = SchemaBatch::new();
+        let batch = SchemaBatch::new();
         indices
             .into_iter()
             .try_for_each(|index| batch.delete::<JellyfishMerkleNodeSchema>(&index.node_key))?;

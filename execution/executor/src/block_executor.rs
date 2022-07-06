@@ -16,7 +16,11 @@ use aptos_vm::VMExecutor;
 use executor_types::{BlockExecutorTrait, Error, StateComputeResult, StateSnapshotDelta};
 use fail::fail_point;
 use scratchpad::SparseMerkleTree;
-use std::marker::PhantomData;
+use std::{marker::PhantomData, sync::Arc};
+use storage_interface::{
+    async_proof_fetcher::AsyncProofFetcher, proof_fetcher::ProofFetcher,
+    sync_proof_fetcher::SyncProofFetcher,
+};
 
 use crate::{
     components::{block_tree::BlockTree, chunk_output::ChunkOutput},
@@ -31,6 +35,7 @@ use storage_interface::{jmt_updates, DbReaderWriter};
 pub struct BlockExecutor<V> {
     pub db: DbReaderWriter,
     block_tree: BlockTree,
+    proof_fetcher: Arc<dyn ProofFetcher>,
     phantom: PhantomData<V>,
 }
 
@@ -40,9 +45,11 @@ where
 {
     pub fn new(db: DbReaderWriter) -> Self {
         let block_tree = BlockTree::new(&db.reader).expect("Block tree failed to init.");
+        let proof_fetcher = Arc::new(AsyncProofFetcher::new(db.reader.clone()));
         Self {
             db,
             block_tree,
+            proof_fetcher,
             phantom: PhantomData,
         }
     }
@@ -109,6 +116,7 @@ where
             let state_view = parent_view.verified_state_view(
                 StateViewId::BlockExecution { block_id },
                 self.db.reader.clone(),
+                self.proof_fetcher.clone(),
             )?;
 
             let chunk_output = {

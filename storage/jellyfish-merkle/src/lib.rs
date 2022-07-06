@@ -762,7 +762,10 @@ where
 
     #[cfg(test)]
     pub fn get(&self, key: HashValue, version: Version) -> Result<Option<HashValue>> {
-        Ok(self.get_with_proof(key, version)?.0.map(|x| x.0))
+        Ok(self
+            .get_with_proof(key, version, &mut None, &mut None)?
+            .0
+            .map(|x| x.0, None, None))
     }
 
     fn get_root_node(&self, version: Version) -> Result<Node<K>> {

@@ -37,7 +37,13 @@ impl DBPruner for LedgerPruner {
     }
 
     fn prune(&self, db_batch: &mut SchemaBatch, max_versions: u64) -> anyhow::Result<Version> {
+        println!("here!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
         if !self.is_pruning_pending() {
+            println!(
+                "min_readable: {}, target: {}",
+                self.min_readable_version(),
+                self.target_version(),
+            );
             return Ok(self.min_readable_version());
         }
         let min_readable_version = self.min_readable_version();

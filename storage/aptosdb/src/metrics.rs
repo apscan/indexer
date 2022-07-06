@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use aptos_metrics_core::{
-    exponential_buckets, register_histogram_vec, register_int_counter, register_int_gauge,
-    register_int_gauge_vec, HistogramVec, IntCounter, IntGauge, IntGaugeVec,
+    exponential_buckets, register_histogram, register_histogram_vec, register_int_counter,
+    register_int_counter_vec, register_int_gauge, register_int_gauge_vec, Histogram, HistogramVec,
+    IntCounter, IntCounterVec, IntGauge, IntGaugeVec,
 };
 use once_cell::sync::Lazy;
 
@@ -156,6 +157,83 @@ pub(crate) static BACKUP_STATE_SNAPSHOT_LEAF_IDX: Lazy<IntGauge> = Lazy::new(|| 
     register_int_gauge!(
         "aptos_backup_handler_state_snapshot_leaf_index",
         "Index of current leaf index returned in a state snapshot backup."
+    )
+    .unwrap()
+});
+
+pub static NODE_CACHE_HIT: Lazy<IntCounterVec> = Lazy::new(|| {
+    register_int_counter_vec!(
+        "aptos_storage_node_cache_hit",
+        "Aptos storage state store node cache hit.",
+        &["type"]
+    )
+    .unwrap()
+});
+
+pub static NODE_CACHE_TOTAL: Lazy<IntCounterVec> = Lazy::new(|| {
+    register_int_counter_vec!(
+        "aptos_storage_node_cache_total",
+        "Aptos storage state store node cache total requests.",
+        &["type"]
+    )
+    .unwrap()
+});
+
+pub static LRU_CACHE: Lazy<Histogram> = Lazy::new(|| {
+    register_histogram!(
+        "lru_cache_hit",
+        "JMT lru cache hit latency.",
+        exponential_buckets(/*start=*/ 1e-6, /*factor=*/ 2.0, /*count=*/ 22).unwrap(),
+    )
+    .unwrap()
+});
+pub static VERSION_CACHE: Lazy<Histogram> = Lazy::new(|| {
+    register_histogram!(
+        "version_cache_hit",
+        "JMT version cache hit latency.",
+        exponential_buckets(/*start=*/ 1e-6, /*factor=*/ 2.0, /*count=*/ 22).unwrap(),
+    )
+    .unwrap()
+});
+pub static CACHE_MISS_TOTAL: Lazy<Histogram> = Lazy::new(|| {
+    register_histogram!(
+        "cache_miss_total",
+        "JMT lru cache miss total latency.",
+        exponential_buckets(/*start=*/ 1e-6, /*factor=*/ 2.0, /*count=*/ 22).unwrap(),
+    )
+    .unwrap()
+});
+
+pub static CACHE_MISS_READ: Lazy<Histogram> = Lazy::new(|| {
+    register_histogram!(
+        "cache_miss_read",
+        "JMT lru cache miss read latency.",
+        exponential_buckets(/*start=*/ 1e-6, /*factor=*/ 2.0, /*count=*/ 22).unwrap(),
+    )
+    .unwrap()
+});
+pub static PROOF_READ: Lazy<Histogram> = Lazy::new(|| {
+    register_histogram!(
+        "proof_read",
+        "proof read latency.",
+        exponential_buckets(/*start=*/ 1e-6, /*factor=*/ 2.0, /*count=*/ 22).unwrap(),
+    )
+    .unwrap()
+});
+
+pub static VALUE_READ: Lazy<Histogram> = Lazy::new(|| {
+    register_histogram!(
+        "value_read",
+        "value read latency.",
+        exponential_buckets(/*start=*/ 1e-6, /*factor=*/ 2.0, /*count=*/ 22).unwrap(),
+    )
+    .unwrap()
+});
+
+pub static NODE_COUNT: Lazy<IntGauge> = Lazy::new(|| {
+    register_int_gauge!(
+        "aptos_storage_node_count",
+        "Aptos storage node count per commit",
     )
     .unwrap()
 });

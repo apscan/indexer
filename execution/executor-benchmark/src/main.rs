@@ -12,7 +12,7 @@ static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
 #[derive(Debug, StructOpt)]
 struct PrunerOpt {
-    #[structopt(long, default_value = "100000", help = "Set to -1 to disable.")]
+    #[structopt(long, default_value = "2000000", help = "Set to -1 to disable.")]
     state_prune_window: i64,
 
     #[structopt(long, default_value = "100000", help = "Set to -1 to disable.")]
@@ -119,6 +119,7 @@ enum Command {
 }
 
 fn main() {
+    aptos_logger::Logger::new().init();
     let _mp = MetricsPusher::start();
     let opt = Opt::from_args();
 
