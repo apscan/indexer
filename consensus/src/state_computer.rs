@@ -119,7 +119,7 @@ impl StateComputer for ExecutionProxy {
 
         // let mut txns = self.data_manager.get_data(payload, logical_time).await?;
         //self.txn_cache.lock().filter_and_update(&mut txns);
-
+        //  aa
         // TODO: figure out error handling for the prologue txn
         let compute_result = monitor!(
             "execute_block",
