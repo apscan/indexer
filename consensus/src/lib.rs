@@ -37,6 +37,7 @@ mod test_utils;
 mod twins;
 mod txn_notifier;
 mod util;
+mod txn_cache;
 
 /// AptosBFT implementation
 pub mod consensus_provider;

@@ -1188,6 +1188,64 @@ dependencies = [
 ]
 
 [[package]]
+<<<<<<< Updated upstream
+=======
+name = "aptos-workspace-hack"
+version = "0.1.0"
+dependencies = [
+ "byteorder",
+ "bytes",
+ "cc",
+ "chrono",
+ "clap 2.34.0",
+ "crossbeam-channel",
+ "crossbeam-deque",
+ "crossbeam-queue",
+ "crossbeam-utils",
+ "crypto-common",
+ "diesel",
+ "digest 0.10.3",
+ "either",
+ "futures-channel",
+ "futures-core",
+ "futures-io",
+ "futures-sink",
+ "futures-task",
+ "futures-util",
+ "generic-array 0.14.5",
+ "getrandom 0.2.6",
+ "hashbrown 0.11.2",
+ "hyper",
+ "include_dir 0.7.2",
+ "itertools",
+ "libc",
+ "log",
+ "memchr",
+ "num-integer",
+ "num-traits 0.2.15",
+ "parking_lot 0.12.1",
+ "rand 0.7.3",
+ "rand 0.8.5",
+ "regex",
+ "regex-syntax",
+ "reqwest",
+ "rusty-fork",
+ "serde 1.0.137",
+ "serde_json",
+ "sha-1 0.10.0",
+ "standback",
+ "syn 1.0.95",
+ "tokio",
+ "tokio-util 0.6.10",
+ "tokio-util 0.7.2",
+ "toml",
+ "tracing",
+ "tracing-core",
+ "warp",
+]
+
+[[package]]
+>>>>>>> Stashed changes
 name = "aptos-writeset-generator"
 version = "0.1.0"
 dependencies = [
@@ -2031,14 +2089,17 @@ dependencies = [
  "fallible",
  "futures",
  "itertools",
+ "lru",
  "mirai-annotations",
  "move-deps",
  "network",
  "num-derive",
  "num-traits 0.2.15",
  "once_cell",
+ "parking_lot 0.12.1",
  "proptest",
  "rand 0.7.3",
+ "rayon",
  "safety-rules",
  "schemadb",
  "serde 1.0.137",
@@ -2516,7 +2577,7 @@ checksum = "4c8858831f7781322e539ea39e72449c46b059638250c14344fec8d0aa6e539c"
 dependencies = [
  "cfg-if 1.0.0",
  "num_cpus",
- "parking_lot 0.12.0",
+ "parking_lot 0.12.1",
 ]
 
 [[package]]
@@ -4024,7 +4085,7 @@ dependencies = [
  "dashmap",
  "hashbrown 0.12.1",
  "once_cell",
- "parking_lot 0.12.0",
+ "parking_lot 0.12.1",
 ]
 
 [[package]]
@@ -4358,9 +4419,9 @@ dependencies = [
 
 [[package]]
 name = "lru"
-version = "0.7.5"
+version = "0.7.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "32613e41de4c47ab04970c348ca7ae7382cf116625755af070b008a15516a889"
+checksum = "c84e6fe5655adc6ce00787cf7dcaf8dc4f998a0565d23eafc207a8b08ca3349a"
 dependencies = [
  "hashbrown 0.11.2",
 ]
@@ -5852,9 +5913,9 @@ dependencies = [
 
 [[package]]
 name = "parking_lot"
-version = "0.12.0"
+version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "87f5ec2493a61ac0506c0f4199f99070cbe83857b0337006a30f3e6719b8ef58"
+checksum = "3742b2c103b9f06bc9fff0a37ff4912935851bee6d36f3c02bcc755bcfec228f"
 dependencies = [
  "lock_api 0.4.6",
  "parking_lot_core 0.9.3",
@@ -7818,7 +7879,7 @@ dependencies = [
  "aptos-types",
  "bcs",
  "move-deps",
- "parking_lot 0.12.0",
+ "parking_lot 0.12.1",
  "scratchpad",
  "serde 1.0.137",
  "thiserror",
@@ -8301,7 +8362,7 @@ dependencies = [
  "mio 0.8.3",
  "num_cpus",
  "once_cell",
- "parking_lot 0.12.0",
+ "parking_lot 0.12.1",
  "pin-project-lite",
  "signal-hook-registry",
  "socket2",

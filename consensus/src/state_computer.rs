@@ -8,6 +8,7 @@ use crate::{
     error::StateSyncError,
     state_replication::{StateComputer, StateComputerCommitCallBackType},
     txn_notifier::TxnNotifier,
+    // txn_cache::TxnCache,
 };
 use anyhow::Result;
 use aptos_crypto::HashValue;
@@ -32,7 +33,13 @@ type NotificationType = (
     Vec<ContractEvent>,
 );
 
+<<<<<<< Updated upstream
 type CommitType = (u64, Round);
+=======
+const CACHE_SIZE: usize = 10;
+
+type CommitType = (u64, Round, Vec<Payload>);
+>>>>>>> Stashed changes
 
 /// Basic communication with the Execution module;
 /// implements StateComputer traits.
@@ -43,7 +50,12 @@ pub struct ExecutionProxy {
     async_state_sync_notifier: channel::Sender<NotificationType>,
     async_commit_notifier: channel::Sender<CommitType>,
     validators: Mutex<Vec<AccountAddress>>,
+<<<<<<< Updated upstream
     write_mutex: AsyncMutex<()>,
+=======
+    data_manager: Arc<dyn DataManager>,
+    // txn_cache: Mutex<TxnCache>,
+>>>>>>> Stashed changes
 }
 
 impl ExecutionProxy {
@@ -88,7 +100,12 @@ impl ExecutionProxy {
             async_state_sync_notifier: tx,
             async_commit_notifier: commit_tx,
             validators: Mutex::new(vec![]),
+<<<<<<< Updated upstream
             write_mutex: AsyncMutex::new(()),
+=======
+            data_manager,
+            // txn_cache: Mutex::new(TxnCache::new(CACHE_SIZE)),
+>>>>>>> Stashed changes
         }
     }
 }
@@ -113,6 +130,17 @@ impl StateComputer for ExecutionProxy {
             "Executing block",
         );
 
+<<<<<<< Updated upstream
+=======
+        let payload = block.get_payload();
+        debug!("QSE: trying to get data., round {} ", block.round());
+
+        let logical_time = LogicalTime::new(block.epoch(), block.epoch());
+
+        let mut txns = self.data_manager.get_data(payload, logical_time).await?;
+        //self.txn_cache.lock().filter_and_update(&mut txns);
+
+>>>>>>> Stashed changes
         // TODO: figure out error handling for the prologue txn
         let compute_result = monitor!(
             "execute_block",
