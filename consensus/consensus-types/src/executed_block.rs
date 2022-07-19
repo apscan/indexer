@@ -95,9 +95,9 @@ impl ExecutedBlock {
         )
     }
 
-    pub fn get_payload(&self) -> Payload {
-        self.block.get_payload()
-    }
+    // pub fn get_payload(&self) -> Payload {
+    //     self.block.get_payload()
+    // }
 
     pub fn maybe_signed_vote_proposal(&self, decoupled_execution: bool) -> MaybeSignedVoteProposal {
         MaybeSignedVoteProposal {
