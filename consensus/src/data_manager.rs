@@ -15,9 +15,11 @@ use futures::channel::mpsc::Sender;
 use std::sync::Arc;
 use dashmap::DashMap;
 use tokio::sync::oneshot;
+use aptos_infallible::Mutex;
 use consensus_types::block::Block;
 use consensus_types::proof_of_store::ProofOfStore;
 use crate::quorum_store::types::Data;
+use crate::quorum_store::utils::RoundExpirations;
 
 /// Notification of execution committed logical time for QuorumStore to clean.
 #[async_trait::async_trait]
@@ -49,7 +51,8 @@ enum DataStatus {
 pub struct QuorumStoreDataManager {
     data_reader: ArcSwapOption<BatchReader>,
     quorum_store_wrapper_tx: ArcSwapOption<Sender<WrapperCommand>>,
-    digest_status: DashMap<HashValue, DataStatus>, // TODO: clean this
+    digest_status: DashMap<HashValue, DataStatus>,
+    expiration_status: Mutex<RoundExpirations<HashValue>>,
 }
 
 impl QuorumStoreDataManager {
@@ -59,6 +62,7 @@ impl QuorumStoreDataManager {
             data_reader: ArcSwapOption::from(None),
             quorum_store_wrapper_tx: ArcSwapOption::from(None),
             digest_status: DashMap::new(),
+            expiration_status: Mutex::new(RoundExpirations::new()),
         }
     }
 }
@@ -114,6 +118,10 @@ impl DataManager for QuorumStoreDataManager {
             .clone()
             .try_send(WrapperCommand::CleanRequest(logical_time, digests))
             .expect("could not send to wrapper");
+        let expired_set = self.expiration_status.lock().expire(logical_time.round());
+        for expired in expired_set {
+            self.digest_status.remove(&expired);
+        }
     }
 
     async fn update_payload(&self, block: &Block) {
@@ -123,6 +131,7 @@ impl DataManager for QuorumStoreDataManager {
                     let receivers = self.request_data(proofs.clone(), LogicalTime::new(block.epoch(), block.round())).await;
                     assert!(!self.digest_status.contains_key(&block.id()));
                     self.digest_status.insert(block.id(), DataStatus::Requested(receivers));
+                    self.expiration_status.lock().add_item(block.id(), block.round());
                 }
                 Payload::Empty => {}
                 Payload::DirectMempool(_) => { unreachable!() }
