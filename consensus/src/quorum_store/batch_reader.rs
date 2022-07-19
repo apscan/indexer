@@ -3,7 +3,7 @@
 
 use crate::network_interface::ConsensusMsg;
 use crate::quorum_store::{
-    types::{Batch, Data, PersistedValue},
+    types::{Batch, PersistedValue},
     utils::RoundExpirations,
 };
 use crate::{
@@ -13,13 +13,12 @@ use crate::{
 use anyhow::bail;
 use aptos_crypto::HashValue;
 use aptos_logger::debug;
-use aptos_types::PeerId;
+use aptos_types::{transaction::SignedTransaction, PeerId};
 use consensus_types::{
     common::Round,
     proof_of_store::{LogicalTime, ProofOfStore},
 };
 use dashmap::DashMap;
-use executor_types::Error;
 use once_cell::sync::OnceCell;
 use std::{
     collections::HashMap,
@@ -37,15 +36,14 @@ use tokio::{
     time,
 };
 
-// Make configuration parameter (passed to QuorumStore).
-/// Maximum number of rounds in the future from local prospective to hold batches for.
-const MAX_BATCH_EXPIRY_ROUND_GAP: Round = 20;
-
 #[derive(Debug)]
 pub(crate) enum BatchReaderCommand {
     GetBatchForPeer(HashValue, PeerId),
-    GetBatchForSelf(ProofOfStore, oneshot::Sender<Result<Data, Error>>),
-    BatchResponse(HashValue, Data),
+    GetBatchForSelf(
+        ProofOfStore,
+        oneshot::Sender<Result<Vec<SignedTransaction>, executor_types::Error>>,
+    ),
+    BatchResponse(HashValue, Vec<SignedTransaction>),
 }
 
 #[derive(PartialEq)]
@@ -116,7 +114,8 @@ pub struct BatchReader {
     expirations: Mutex<RoundExpirations<HashValue>>,
     batch_store_tx: Sender<BatchStoreCommand>,
     self_tx: Sender<BatchReaderCommand>,
-    max_execution_round_lag: Round,
+    max_expiry_round_gap: Round,
+    expiry_grace_rounds: Round,
     memory_quota: usize,
     db_quota: usize,
 }
@@ -129,7 +128,8 @@ impl BatchReader {
         my_peer_id: PeerId,
         batch_store_tx: Sender<BatchStoreCommand>,
         self_tx: Sender<BatchReaderCommand>,
-        max_execution_round_lag: Round,
+        max_expiry_round_gap: Round,
+        expiry_grace_rounds: Round,
         memory_quota: usize,
         db_quota: usize,
     ) -> (Self, Vec<HashValue>) {
@@ -142,7 +142,8 @@ impl BatchReader {
             expirations: Mutex::new(RoundExpirations::new()),
             batch_store_tx,
             self_tx,
-            max_execution_round_lag,
+            max_expiry_round_gap,
+            expiry_grace_rounds,
             memory_quota,
             db_quota,
         };
@@ -152,7 +153,7 @@ impl BatchReader {
             let expiration = value.expiration;
             assert!(epoch >= expiration.epoch());
             if epoch > expiration.epoch()
-                || last_committed_round > expiration.round() + MAX_BATCH_EXPIRY_ROUND_GAP
+                || last_committed_round > expiration.round() + expiry_grace_rounds
             {
                 expired_keys.push(digest);
             } else {
@@ -196,7 +197,7 @@ impl BatchReader {
     pub(crate) fn save(&self, digest: HashValue, value: PersistedValue) -> anyhow::Result<bool> {
         if value.expiration.epoch() == self.epoch()
             && value.expiration.round() > self.last_committed_round()
-            && value.expiration.round() <= self.last_committed_round() + MAX_BATCH_EXPIRY_ROUND_GAP
+            && value.expiration.round() <= self.last_committed_round() + self.max_expiry_round_gap
         {
             if let Some(entry) = self.db_cache.get(&digest) {
                 if entry.expiration.round() >= value.expiration.round() {
@@ -222,8 +223,8 @@ impl BatchReader {
             "Execution epoch inconsistent with BatchReader"
         );
 
-        let expired_round = if certified_time.round() >= self.max_execution_round_lag {
-            certified_time.round() - self.max_execution_round_lag
+        let expired_round = if certified_time.round() >= self.expiry_grace_rounds {
+            certified_time.round() - self.expiry_grace_rounds
         } else {
             0
         };
@@ -289,7 +290,10 @@ impl BatchReader {
 
     // TODO: maybe check the epoch to stop communicating on epoch change.
     // TODO: use timeouts and return an error if cannot get tha batch.
-    pub async fn get_batch(&self, proof: ProofOfStore) -> oneshot::Receiver<Result<Data, Error>> {
+    pub async fn get_batch(
+        &self,
+        proof: ProofOfStore,
+    ) -> oneshot::Receiver<Result<Vec<SignedTransaction>, executor_types::Error>> {
         let (tx, rx) = oneshot::channel();
 
         if let Some(value) = self.db_cache.get(&proof.digest()) {

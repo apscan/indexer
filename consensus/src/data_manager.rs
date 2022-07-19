@@ -98,8 +98,13 @@ impl DataManager for QuorumStoreDataManager {
             Payload::InQuorumStore(poss) => {
                 let mut receivers = Vec::new();
                 for pos in poss {
-                    debug!("QSE: requesting pos {:?}, digest {}", pos, pos.digest());
-                    if logical_time < pos.expiration() {
+                    debug!(
+                        "QSE: requesting pos {:?}, digest {}, logicaltime {:?}",
+                        pos,
+                        pos.digest(),
+                        logical_time
+                    );
+                    if logical_time <= pos.expiration() {
                         receivers.push(
                             self.data_reader
                                 .load()

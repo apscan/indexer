@@ -1,12 +1,11 @@
 // Copyright (c) Aptos
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::quorum_store::types::{BatchId, TxnData};
-use aptos_crypto::{hash::DefaultHasher, HashValue};
+use crate::quorum_store::types::{BatchId, SerializedTransaction};
+use aptos_crypto::HashValue;
 use aptos_mempool::{QuorumStoreRequest, QuorumStoreResponse};
 use aptos_metrics_core::monitor;
 use aptos_types::transaction::SignedTransaction;
-use bcs::to_bytes;
 use chrono::Utc;
 use consensus_types::common::{Round, TransactionSummary};
 use futures::channel::{mpsc::Sender, oneshot};
@@ -22,7 +21,7 @@ use tokio::time::timeout;
 pub(crate) struct BatchBuilder {
     id: BatchId,
     summaries: Vec<TransactionSummary>,
-    data: Vec<TxnData>,
+    data: Vec<SerializedTransaction>,
     num_bytes: usize,
     max_bytes: usize,
 }
@@ -39,24 +38,16 @@ impl BatchBuilder {
     }
 
     pub(crate) fn append_transaction(&mut self, txn: &SignedTransaction) -> bool {
-        let bytes = to_bytes(&txn).unwrap();
+        let serialized_txn = SerializedTransaction::from_signed_txn(&txn);
 
-        if self.num_bytes + bytes.len() <= self.max_bytes {
+        if self.num_bytes + serialized_txn.len() <= self.max_bytes {
             self.summaries.push(TransactionSummary {
                 sender: txn.sender(),
                 sequence_number: txn.sequence_number(),
             });
-            self.num_bytes = self.num_bytes + bytes.len();
+            self.num_bytes = self.num_bytes + serialized_txn.len();
 
-            // TODO: check if hashing per txn is too costly (hopefully not as hashes are
-            // associated with txns later in the process). Also, potentially parallelize.
-            // Then, we should also probably parallelize incoming digest computation.
-            let mut hasher = DefaultHasher::new(b"TxnData");
-            hasher.update(&bytes);
-            self.data.push(TxnData {
-                txn_bytes: bytes,
-                hash: hasher.finish(),
-            });
+            self.data.push(serialized_txn);
             true
         } else {
             false
@@ -71,15 +62,21 @@ impl BatchBuilder {
         self.id
     }
 
-    /// Clears the state, increments (batch) id.
-    pub(crate) fn take_batch(&mut self) -> (Vec<TransactionSummary>, Vec<TxnData>) {
-        self.id = self.id + 1;
-        self.num_bytes = 0;
-        (mem::take(&mut self.summaries), mem::take(&mut self.data))
+    pub(crate) fn take_serialized_txns(&mut self) -> Vec<SerializedTransaction> {
+        mem::take(&mut self.data)
     }
 
-    pub(crate) fn cloned_summaries(&self) -> Vec<TransactionSummary> {
-        self.summaries.clone()
+    /// Clears the state, increments (batch) id.
+    pub(crate) fn take_summaries(&mut self) -> Vec<TransactionSummary> {
+        assert!(self.data.is_empty());
+
+        self.id = self.id + 1;
+        self.num_bytes = 0;
+        mem::take(&mut self.summaries)
+    }
+
+    pub(crate) fn summaries(&self) -> &Vec<TransactionSummary> {
+        &self.summaries
     }
 }
 

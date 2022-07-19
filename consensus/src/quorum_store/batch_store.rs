@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::network_interface::ConsensusMsg;
-use crate::quorum_store::types::{Batch, Data, PersistedValue};
+use crate::quorum_store::types::{Batch, PersistedValue};
 use crate::{
     network::NetworkSender,
     quorum_store::{
@@ -13,7 +13,8 @@ use crate::{
 use aptos_crypto::HashValue;
 use aptos_logger::debug;
 use aptos_types::{
-    validator_signer::ValidatorSigner, validator_verifier::ValidatorVerifier, PeerId,
+    transaction::SignedTransaction, validator_signer::ValidatorSigner,
+    validator_verifier::ValidatorVerifier, PeerId,
 };
 use consensus_types::common::Round;
 use consensus_types::proof_of_store::{LogicalTime, SignedDigest};
@@ -34,7 +35,7 @@ pub struct PersistRequest {
 impl PersistRequest {
     pub fn new(
         author: PeerId,
-        payload: Data,
+        payload: Vec<SignedTransaction>,
         digest_hash: HashValue,
         num_bytes: usize,
         expiration: LogicalTime,
@@ -52,7 +53,7 @@ pub(crate) enum BatchStoreCommand {
     BatchRequest(
         HashValue,
         PeerId,
-        Option<oneshot::Sender<Result<Data, Error>>>,
+        Option<oneshot::Sender<Result<Vec<SignedTransaction>, Error>>>,
     ),
     Clean(Vec<HashValue>),
 }
@@ -78,7 +79,8 @@ impl BatchStore {
         batch_reader_rx: Receiver<BatchReaderCommand>,
         db: Arc<QuorumStoreDB>,
         validator_signer: Arc<ValidatorSigner>,
-        max_execution_round_lag: Round,
+        max_batch_expiry_round_gap: Round,
+        batch_expiry_grace_period: Round,
         batch_request_num_peers: usize,
         batch_request_timeout_ms: usize,
         memory_quota: usize,
@@ -93,7 +95,8 @@ impl BatchStore {
             my_peer_id,
             batch_store_tx,
             batch_reader_tx,
-            max_execution_round_lag,
+            max_batch_expiry_round_gap,
+            batch_expiry_grace_period,
             memory_quota,
             db_quota,
         );
@@ -102,14 +105,12 @@ impl BatchStore {
         }
         let batch_reader: Arc<BatchReader> = Arc::new(batch_reader);
         let batch_reader_clone = batch_reader.clone();
-        // let validator_signer_clone = validator_signer.clone();
         let net = network_sender.clone();
         tokio::spawn(async move {
             batch_reader_clone
                 .start(
                     batch_reader_rx,
                     net,
-                    // validator_signer_clone,
                     batch_request_num_peers,
                     batch_request_timeout_ms,
                 )
@@ -196,32 +197,46 @@ impl BatchStore {
                 }
                 BatchStoreCommand::Clean(digests) => {
                     if let Err(_) = self.db.delete_batches(digests) {
-                        //TODO: do something
+                        // TODO: do something
                     }
                 }
                 BatchStoreCommand::BatchRequest(digest, peer_id, maybe_tx) => {
                     match self.db.get_batch(digest) {
-                        Ok(maybe_persisted_value) => {
-                            if self.my_peer_id == peer_id {
-                                //ok to unwrap because value is guaranteed to be in the db and have actual payload
-                                maybe_tx
-                                    .unwrap()
-                                    .send(Ok(maybe_persisted_value.unwrap().maybe_payload.unwrap()))
-                                    .expect("Failed to send PersistedValue");
-                            } else {
-                                let batch = Batch::new(
-                                    self.epoch,
-                                    self.my_peer_id,
-                                    digest,
-                                    Some(maybe_persisted_value.unwrap().maybe_payload.unwrap()),
-                                    // self.validator_signer.clone(),
-                                );
-                                let msg = ConsensusMsg::BatchMsg(Box::new(batch));
-                                self.network_sender.send(msg, vec![peer_id]).await;
+                        Ok(Some(persisted_value)) => {
+                            let payload = persisted_value
+                                .maybe_payload
+                                .expect("Persisted value in QuorumStore DB must have payload");
+                            match maybe_tx {
+                                Some(payload_tx) => {
+                                    assert_eq!(
+                                        self.my_peer_id, peer_id,
+                                        "Return channel must be to self"
+                                    );
+                                    payload_tx
+                                        .send(Ok(payload))
+                                        .expect("Failed to send PersistedValue");
+                                }
+                                None => {
+                                    assert_ne!(
+                                        self.my_peer_id, peer_id,
+                                        "Request from self without return channel"
+                                    );
+                                    let batch = Batch::new(
+                                        self.epoch,
+                                        self.my_peer_id,
+                                        digest,
+                                        Some(payload),
+                                    );
+                                    let msg = ConsensusMsg::BatchMsg(Box::new(batch));
+                                    self.network_sender.send(msg, vec![peer_id]).await;
+                                }
                             }
                         }
+                        Ok(None) => unreachable!(
+                            "Could not read persisted value (according to BatchReader) from DB"
+                        ),
                         Err(_) => {
-                            //TODO: do something
+                            // TODO: handle error, e.g. from self or not, log, panic.
                         }
                     }
                 }

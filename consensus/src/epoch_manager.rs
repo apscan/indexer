@@ -404,6 +404,7 @@ impl EpochManager {
         network_sender: NetworkSender,
         consensus_to_quorum_store_rx: Receiver<WrapperCommand>,
         wrapper_to_quorum_store_tx: tokio::sync::mpsc::Sender<QuorumStoreCommand>,
+        qs_config: &QuorumStoreConfig,
     ) {
         // TODO: make this not use a ConsensusRequest
         let (wrapper_quorum_store_msg_tx, wrapper_quorum_store_msg_rx) =
@@ -424,9 +425,10 @@ impl EpochManager {
             self.quorum_store_to_mempool_tx.clone(),
             wrapper_to_quorum_store_tx,
             self.config.mempool_txn_pull_timeout_ms,
-            // TODO
-            100,
-            1000000,
+            qs_config.mempool_txn_pull_max_count,
+            qs_config.max_batch_bytes,
+            qs_config.max_batch_expiry_round_gap,
+            qs_config.end_batch_ms,
         );
         tokio::spawn(quorum_store_wrapper.start(
             network_sender,
@@ -555,11 +557,11 @@ impl EpochManager {
 
         let safety_rules_container = Arc::new(Mutex::new(safety_rules));
 
-        //Start QuorumStore
+        // Start QuorumStore
         let (consensus_to_quorum_store_tx, consensus_to_quorum_store_rx) =
             mpsc::channel(self.config.intra_consensus_channel_buffer_size);
         if self.config.use_quorum_store {
-            //TODO: create channels between quorum_store, execution, and wrapper and pass around.
+            // TODO: create channels between quorum_store, execution, and wrapper and pass around.
 
             // TODO: grab config.
             // TODO: think about these numbers
@@ -567,15 +569,19 @@ impl EpochManager {
                 channel_size: 100,
                 proof_timeout_ms: 1000,
                 batch_request_num_peers: 3,
+                end_batch_ms: 500,
+                max_batch_bytes: 1000000,
                 batch_request_timeout_ms: 1000,
-                max_execution_round_lag: 20,
+                max_batch_expiry_round_gap: 20,
+                batch_expiry_grace_rounds: 5,
                 max_batch_size: 200000,
                 memory_quota: 100000000,
                 db_quota: 10000000000,
+                mempool_txn_pull_max_count: 100,
             };
 
             let (wrapper_quorum_store_tx, wrapper_quorum_store_rx) =
-                tokio::sync::mpsc::channel(100);
+                tokio::sync::mpsc::channel(config.channel_size);
             let data_reader = self.spawn_quorum_store(
                 config.clone(),
                 network_sender.clone(),
@@ -590,6 +596,7 @@ impl EpochManager {
                 network_sender.clone(),
                 consensus_to_quorum_store_rx,
                 wrapper_quorum_store_tx,
+                &config,
             );
         } else {
             self.spawn_direct_mempool_quorum_store(consensus_to_quorum_store_rx);

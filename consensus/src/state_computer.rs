@@ -116,7 +116,7 @@ impl StateComputer for ExecutionProxy {
         let payload = block.get_payload();
         debug!("QSE: trying to get data., round {} ", block.round());
 
-        let logical_time = LogicalTime::new(block.epoch(), block.epoch());
+        let logical_time = LogicalTime::new(block.epoch(), block.round());
 
         let txns = self.data_manager.get_data(payload, logical_time).await?;
 
