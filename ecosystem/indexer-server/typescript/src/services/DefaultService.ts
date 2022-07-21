@@ -212,6 +212,39 @@ const getOwnershipsByIds = ({
   },
 );
 
+interface GetOwnershipByOwnerParams {
+  ownerAddress: string;
+}
+
+/**
+* Returns ownership by owner address
+*
+* @param ownerAddress ownerAddress
+* @returns Ownership
+* */
+const getOwnershipsByOwner = ({
+  ownerAddress,
+}: GetOwnershipByOwnerParams) => new Promise<SuccessResponseType<PrismaOwnerships | null>>(
+  async (resolve, reject) => {
+    try {
+      const data = await prisma.ownerships.findMany({
+        where: {
+          amount: {
+            gt: 0,
+          },
+          owner: ownerAddress,
+        },
+      });
+      resolve(Service.successResponse(data));
+    } catch (e: any) {
+      reject(Service.rejectResponse(
+        e.message || 'Invalid input',
+        e.status || 405,
+      ));
+    }
+  },
+);
+
 interface GetOwnershipsByTokenParams {
   offset: number | string;
   size: number | string;
