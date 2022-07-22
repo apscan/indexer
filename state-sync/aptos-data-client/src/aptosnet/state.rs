@@ -18,7 +18,7 @@ use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
 };
-use storage_service_types::{StorageServerSummary, StorageServiceRequest};
+use storage_service_types::{requests::StorageServiceRequest, StorageServerSummary};
 
 /// Scores for peer rankings based on preferences and behavior.
 const MAX_SCORE: f64 = 100.0;

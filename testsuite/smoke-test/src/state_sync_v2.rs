@@ -73,6 +73,29 @@ async fn test_full_node_bootstrap_outputs() {
 }
 
 #[tokio::test]
+async fn test_full_node_bootstrap_outputs_no_compression() {
+    // Create a validator swarm of 1 validator node
+    let mut swarm = new_local_swarm_with_aptos(1).await;
+
+    // Create a fullnode config that uses transaction outputs to sync (without compression)
+    let mut vfn_config = NodeConfig::default_for_validator_full_node();
+    vfn_config.state_sync.state_sync_driver.enable_state_sync_v2 = true;
+    vfn_config.state_sync.state_sync_driver.bootstrapping_mode =
+        BootstrappingMode::ApplyTransactionOutputsFromGenesis;
+    vfn_config
+        .state_sync
+        .state_sync_driver
+        .continuous_syncing_mode = ContinuousSyncingMode::ApplyTransactionOutputs;
+    vfn_config.state_sync.aptos_data_client.use_compression = false;
+
+    // Create the fullnode
+    let vfn_peer_id = create_full_node(vfn_config, &mut swarm).await;
+
+    // Test the ability of the fullnode to sync
+    test_full_node_sync(vfn_peer_id, swarm, true).await;
+}
+
+#[tokio::test]
 async fn test_full_node_bootstrap_transactions() {
     // Create a validator swarm of 1 validator node
     let mut swarm = new_local_swarm_with_aptos(1).await;

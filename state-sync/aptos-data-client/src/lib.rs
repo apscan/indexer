@@ -13,7 +13,7 @@ use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::fmt::Display;
-use storage_service::UnexpectedResponseError;
+use storage_service::responses::UnexpectedErrorEncountered;
 use storage_service_types::{self as storage_service, CompleteDataRange, Epoch};
 use thiserror::Error;
 
@@ -55,10 +55,9 @@ impl Error {
     }
 }
 
-// TODO(philiphayes): better error wrapping
-impl From<UnexpectedResponseError> for Error {
-    fn from(err: UnexpectedResponseError) -> Self {
-        Self::InvalidResponse(err.0)
+impl From<UnexpectedErrorEncountered> for Error {
+    fn from(error: UnexpectedErrorEncountered) -> Self {
+        Self::InvalidResponse(error.to_string())
     }
 }
 

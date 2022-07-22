@@ -20,7 +20,8 @@ use network::{
 };
 use std::{sync::Arc, time::Duration};
 use storage_service_types::{
-    StorageServiceError, StorageServiceMessage, StorageServiceRequest, StorageServiceResponse,
+    requests::StorageServiceRequest, responses::StorageServiceResponse, StorageServiceError,
+    StorageServiceMessage,
 };
 use thiserror::Error;
 

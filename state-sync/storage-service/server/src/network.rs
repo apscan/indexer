@@ -21,7 +21,8 @@ use std::{
     task::{Context, Poll},
 };
 use storage_service_types::{
-    Result, StorageServiceMessage, StorageServiceRequest, StorageServiceResponse,
+    requests::StorageServiceRequest, responses::StorageServiceResponse, Result,
+    StorageServiceMessage,
 };
 
 pub fn network_endpoint_config(storage_config: StorageServiceConfig) -> AppConfig {

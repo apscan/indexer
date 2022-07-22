@@ -51,12 +51,18 @@ use network::{
 };
 use std::{collections::BTreeMap, sync::Arc, time::Duration};
 use storage_interface::{DbReader, ExecutedTrees, Order, StartupInfo};
+use storage_service_types::responses::{
+    EpochEndingLedgerInfosResponse, NewTransactionOutputsWithProofResponse,
+    NewTransactionsWithProofResponse, StateValueChunkWithProofResponse,
+    TransactionOutputsWithProofResponse, TransactionsWithProofResponse,
+};
 use storage_service_types::{
-    CompleteDataRange, DataSummary, Epoch, EpochEndingLedgerInfoRequest,
-    NewTransactionOutputsWithProofRequest, NewTransactionsWithProofRequest, ProtocolMetadata,
-    ServerProtocolVersion, StateValuesWithProofRequest, StorageServerSummary, StorageServiceError,
-    StorageServiceMessage, StorageServiceRequest, StorageServiceResponse,
-    TransactionOutputsWithProofRequest, TransactionsWithProofRequest,
+    requests::EpochEndingLedgerInfoRequest, requests::NewTransactionOutputsWithProofRequest,
+    requests::NewTransactionsWithProofRequest, requests::ServerProtocolVersion,
+    requests::StateValuesWithProofRequest, requests::StorageServiceRequest,
+    requests::TransactionOutputsWithProofRequest, requests::TransactionsWithProofRequest,
+    responses::StorageServiceResponse, CompleteDataRange, DataSummary, Epoch, ProtocolMetadata,
+    StorageServerSummary, StorageServiceError, StorageServiceMessage,
 };
 use tokio::time::timeout;
 
@@ -71,6 +77,7 @@ async fn test_cachable_requests_eviction() {
     let version = 101;
     let start_index = 100;
     let end_index = 199;
+    let use_compression = true;
     let state_value_chunk_with_proof = StateValueChunkWithProof {
         first_index: start_index,
         last_index: end_index,
@@ -113,6 +120,7 @@ async fn test_cachable_requests_eviction() {
             version,
             start_index,
             end_index,
+            use_compression,
         });
         let _ = mock_client.process_request(request).await.unwrap();
     }
@@ -128,6 +136,7 @@ async fn test_cachable_requests_eviction() {
         version,
         start_index,
         end_index,
+        use_compression,
     });
     let _ = mock_client.process_request(request).await.unwrap();
 }
@@ -139,6 +148,7 @@ async fn test_cachable_requests_data_versions() {
     let end_version = 454;
     let proof_version = end_version;
     let include_events = false;
+    let use_compression = true;
 
     // Create the mock db reader
     let mut db_reader = create_mock_db_reader();
@@ -181,6 +191,7 @@ async fn test_cachable_requests_data_versions() {
                     start_version: *start_version,
                     end_version,
                     include_events,
+                    use_compression,
                 });
 
             // Process the request
@@ -188,8 +199,15 @@ async fn test_cachable_requests_data_versions() {
 
             // Verify the response is correct
             match response {
-                StorageServiceResponse::TransactionsWithProof(transactions_with_proof) => {
-                    assert_eq!(transactions_with_proof, transaction_lists_with_proof[i])
+                StorageServiceResponse::TransactionsWithProof(response) => {
+                    assert_eq!(
+                        response,
+                        TransactionsWithProofResponse::new(
+                            transaction_lists_with_proof[i].clone(),
+                            true
+                        )
+                        .unwrap()
+                    )
                 }
                 _ => panic!("Expected transactions with proof but got: {:?}", response),
             };
@@ -222,6 +240,7 @@ async fn test_get_states_with_proof() {
         let version = 101;
         let start_index = 100;
         let end_index = start_index + chunk_size - 1;
+        let use_compression = true;
         let state_value_chunk_with_proof = StateValueChunkWithProof {
             first_index: start_index,
             last_index: end_index,
@@ -254,14 +273,24 @@ async fn test_get_states_with_proof() {
             version,
             start_index,
             end_index,
+            use_compression,
         });
         let response = mock_client.process_request(request).await.unwrap();
 
         // Verify the response is correct
-        assert_eq!(
-            response,
-            StorageServiceResponse::StateValueChunkWithProof(state_value_chunk_with_proof)
-        );
+        match response {
+            StorageServiceResponse::StateValueChunkWithProof(response) => {
+                assert_eq!(
+                    response,
+                    StateValueChunkWithProofResponse::new(state_value_chunk_with_proof, true)
+                        .unwrap()
+                )
+            }
+            _ => panic!(
+                "Expected state value chunk with proof but got: {:?}",
+                response
+            ),
+        };
     }
 }
 
@@ -274,11 +303,13 @@ async fn test_get_states_with_proof_invalid() {
     // Test invalid ranges and chunks that are too large
     let max_state_chunk_size = StorageServiceConfig::default().max_state_chunk_size;
     let start_index = 100;
+    let use_compression = true;
     for end_index in [99, start_index + max_state_chunk_size] {
         let request = StorageServiceRequest::GetStateValuesWithProof(StateValuesWithProofRequest {
             version: 0,
             start_index,
             end_index,
+            use_compression,
         });
 
         // Process and verify the response
@@ -302,6 +333,7 @@ async fn test_get_new_transactions() {
             let highest_epoch = 43;
             let lowest_version = 4566;
             let peer_version = highest_version - chunk_size;
+            let use_compression = true;
             let highest_ledger_info =
                 create_test_ledger_info_with_sigs(highest_epoch, highest_version);
             let transaction_list_with_proof = create_transaction_list_with_proof(
@@ -333,6 +365,7 @@ async fn test_get_new_transactions() {
                 peer_version,
                 highest_epoch,
                 include_events,
+                use_compression,
             )
             .await;
 
@@ -343,7 +376,7 @@ async fn test_get_new_transactions() {
             wait_for_subscription_service_to_refresh(&mut mock_client, &mock_time).await;
 
             // Verify a response is received and that it contains the correct data
-            verify_new_transactions_with_proof(
+            verify_new_transactions_with_proof_raw(
                 &mut mock_client,
                 response_receiver,
                 transaction_list_with_proof,
@@ -365,6 +398,7 @@ async fn test_get_new_transactions_epoch_change() {
         let peer_version = highest_version - 100;
         let peer_epoch = highest_epoch - 20;
         let epoch_change_version = peer_version + 45;
+        let use_compression = true;
         let epoch_change_proof = EpochChangeProof {
             ledger_info_with_sigs: vec![create_test_ledger_info_with_sigs(
                 peer_epoch,
@@ -408,6 +442,7 @@ async fn test_get_new_transactions_epoch_change() {
             peer_version,
             peer_epoch,
             include_events,
+            use_compression,
         )
         .await;
 
@@ -415,7 +450,7 @@ async fn test_get_new_transactions_epoch_change() {
         wait_for_subscription_service_to_refresh(&mut mock_client, &mock_time).await;
 
         // Verify a response is received and that it contains the correct data
-        verify_new_transactions_with_proof(
+        verify_new_transactions_with_proof_raw(
             &mut mock_client,
             response_receiver,
             transaction_list_with_proof,
@@ -436,6 +471,7 @@ async fn test_get_new_transactions_max_chunk() {
         let max_chunk_size = StorageServiceConfig::default().max_transaction_chunk_size;
         let requested_chunk_size = max_chunk_size + 1;
         let peer_version = highest_version - requested_chunk_size;
+        let use_compression = true;
         let highest_ledger_info = create_test_ledger_info_with_sigs(highest_epoch, highest_version);
         let transaction_list_with_proof = create_transaction_list_with_proof(
             peer_version + 1,
@@ -466,6 +502,7 @@ async fn test_get_new_transactions_max_chunk() {
             peer_version,
             highest_epoch,
             include_events,
+            use_compression,
         )
         .await;
 
@@ -473,7 +510,7 @@ async fn test_get_new_transactions_max_chunk() {
         wait_for_subscription_service_to_refresh(&mut mock_client, &mock_time).await;
 
         // Verify a response is received and that it contains the correct data
-        verify_new_transactions_with_proof(
+        verify_new_transactions_with_proof_raw(
             &mut mock_client,
             response_receiver,
             transaction_list_with_proof,
@@ -496,6 +533,7 @@ async fn test_get_new_transaction_outputs() {
         let highest_epoch = 30;
         let lowest_version = 101;
         let peer_version = highest_version - chunk_size;
+        let use_compression = true;
         let highest_ledger_info = create_test_ledger_info_with_sigs(highest_epoch, highest_version);
         let output_list_with_proof =
             create_output_list_with_proof(peer_version + 1, highest_version, highest_version);
@@ -516,9 +554,13 @@ async fn test_get_new_transaction_outputs() {
         tokio::spawn(service.start());
 
         // Send a request to subscribe to new transaction outputs
-        let mut response_receiver =
-            send_new_transaction_output_request(&mut mock_client, peer_version, highest_epoch)
-                .await;
+        let mut response_receiver = send_new_transaction_output_request(
+            &mut mock_client,
+            peer_version,
+            highest_epoch,
+            use_compression,
+        )
+        .await;
 
         // Verify no subscription response has been received yet
         assert_none!(response_receiver.try_recv().unwrap());
@@ -527,7 +569,7 @@ async fn test_get_new_transaction_outputs() {
         wait_for_subscription_service_to_refresh(&mut mock_client, &mock_time).await;
 
         // Verify a response is received and that it contains the correct data
-        verify_new_transaction_outputs_with_proof(
+        verify_new_transaction_outputs_with_proof_raw(
             &mut mock_client,
             response_receiver,
             output_list_with_proof,
@@ -546,6 +588,7 @@ async fn test_get_new_transaction_outputs_epoch_change() {
     let peer_version = highest_version - 1000;
     let peer_epoch = highest_epoch - 1000;
     let epoch_change_version = peer_version + 1;
+    let use_compression = true;
     let epoch_change_proof = EpochChangeProof {
         ledger_info_with_sigs: vec![create_test_ledger_info_with_sigs(
             peer_epoch,
@@ -575,14 +618,19 @@ async fn test_get_new_transaction_outputs_epoch_change() {
     tokio::spawn(service.start());
 
     // Send a request to subscribe to new transaction outputs
-    let response_receiver =
-        send_new_transaction_output_request(&mut mock_client, peer_version, peer_epoch).await;
+    let response_receiver = send_new_transaction_output_request(
+        &mut mock_client,
+        peer_version,
+        peer_epoch,
+        use_compression,
+    )
+    .await;
 
     // Elapse enough time to force the subscription thread to work
     wait_for_subscription_service_to_refresh(&mut mock_client, &mock_time).await;
 
     // Verify a response is received and that it contains the correct data
-    verify_new_transaction_outputs_with_proof(
+    verify_new_transaction_outputs_with_proof_raw(
         &mut mock_client,
         response_receiver,
         output_list_with_proof,
@@ -600,6 +648,7 @@ async fn test_get_new_transaction_outputs_max_chunk() {
     let max_chunk_size = StorageServiceConfig::default().max_transaction_output_chunk_size;
     let requested_chunk_size = max_chunk_size + 1;
     let peer_version = highest_version - requested_chunk_size;
+    let use_compression = true;
     let highest_ledger_info = create_test_ledger_info_with_sigs(highest_epoch, highest_version);
     let output_list_with_proof = create_output_list_with_proof(
         peer_version + 1,
@@ -623,14 +672,19 @@ async fn test_get_new_transaction_outputs_max_chunk() {
     tokio::spawn(service.start());
 
     // Send a request to subscribe to new transaction outputs
-    let response_receiver =
-        send_new_transaction_output_request(&mut mock_client, peer_version, highest_epoch).await;
+    let response_receiver = send_new_transaction_output_request(
+        &mut mock_client,
+        peer_version,
+        highest_epoch,
+        use_compression,
+    )
+    .await;
 
     // Elapse enough time to force the subscription thread to work
     wait_for_subscription_service_to_refresh(&mut mock_client, &mock_time).await;
 
     // Verify a response is received and that it contains the correct data
-    verify_new_transaction_outputs_with_proof(
+    verify_new_transaction_outputs_with_proof_raw(
         &mut mock_client,
         response_receiver,
         output_list_with_proof,
@@ -786,6 +840,7 @@ async fn test_get_transactions_with_proof() {
             let start_version = 0;
             let end_version = start_version + chunk_size - 1;
             let proof_version = end_version;
+            let use_compression = true;
             let transaction_list_with_proof = create_transaction_list_with_proof(
                 start_version,
                 end_version,
@@ -818,6 +873,7 @@ async fn test_get_transactions_with_proof() {
                     start_version,
                     end_version,
                     include_events,
+                    use_compression,
                 });
 
             // Process the request
@@ -825,8 +881,12 @@ async fn test_get_transactions_with_proof() {
 
             // Verify the response is correct
             match response {
-                StorageServiceResponse::TransactionsWithProof(transactions_with_proof) => {
-                    assert_eq!(transactions_with_proof, transaction_list_with_proof)
+                StorageServiceResponse::TransactionsWithProof(response) => {
+                    assert_eq!(
+                        response,
+                        TransactionsWithProofResponse::new(transaction_list_with_proof, true)
+                            .unwrap()
+                    )
                 }
                 _ => panic!("Expected transactions with proof but got: {:?}", response),
             };
@@ -850,6 +910,7 @@ async fn test_get_transactions_with_proof_invalid() {
                 start_version,
                 end_version,
                 include_events: true,
+                use_compression: true,
             });
 
         // Process and verify the response
@@ -870,6 +931,7 @@ async fn test_get_transaction_outputs_with_proof() {
         let start_version = 0;
         let end_version = start_version + chunk_size - 1;
         let proof_version = end_version;
+        let use_compression = true;
         let output_list_with_proof =
             create_output_list_with_proof(start_version, end_version, proof_version);
 
@@ -896,6 +958,7 @@ async fn test_get_transaction_outputs_with_proof() {
                 proof_version,
                 start_version,
                 end_version,
+                use_compression,
             },
         );
 
@@ -904,8 +967,11 @@ async fn test_get_transaction_outputs_with_proof() {
 
         // Verify the response is correct
         match response {
-            StorageServiceResponse::TransactionOutputsWithProof(outputs_with_proof) => {
-                assert_eq!(outputs_with_proof, output_list_with_proof)
+            StorageServiceResponse::TransactionOutputsWithProof(response) => {
+                assert_eq!(
+                    response,
+                    TransactionOutputsWithProofResponse::new(output_list_with_proof, true).unwrap()
+                )
             }
             _ => panic!(
                 "Expected transaction outputs with proof but got: {:?}",
@@ -924,12 +990,14 @@ async fn test_get_transaction_outputs_with_proof_invalid() {
     // Test invalid ranges and chunks that are too large
     let max_output_chunk_size = StorageServiceConfig::default().max_transaction_output_chunk_size;
     let start_version = 1000;
+    let use_compression = true;
     for end_version in [1, start_version + max_output_chunk_size] {
         let request = StorageServiceRequest::GetTransactionOutputsWithProof(
             TransactionOutputsWithProofRequest {
                 proof_version: end_version,
                 start_version,
                 end_version,
+                use_compression,
             },
         );
 
@@ -946,6 +1014,7 @@ async fn test_get_epoch_ending_ledger_infos() {
         // Create test data
         let start_epoch = 11;
         let expected_end_epoch = start_epoch + chunk_size - 1;
+        let use_compression = true;
         let epoch_change_proof = EpochChangeProof {
             ledger_info_with_sigs: create_epoch_ending_ledger_infos(
                 start_epoch,
@@ -972,6 +1041,7 @@ async fn test_get_epoch_ending_ledger_infos() {
             StorageServiceRequest::GetEpochEndingLedgerInfos(EpochEndingLedgerInfoRequest {
                 start_epoch,
                 expected_end_epoch,
+                use_compression,
             });
 
         // Process the request
@@ -979,8 +1049,11 @@ async fn test_get_epoch_ending_ledger_infos() {
 
         // Verify the response is correct
         match response {
-            StorageServiceResponse::EpochEndingLedgerInfos(response_epoch_change_proof) => {
-                assert_eq!(response_epoch_change_proof, epoch_change_proof)
+            StorageServiceResponse::EpochEndingLedgerInfos(response) => {
+                assert_eq!(
+                    response,
+                    EpochEndingLedgerInfosResponse::new(epoch_change_proof, true).unwrap()
+                )
             }
             _ => panic!("Expected epoch ending ledger infos but got: {:?}", response),
         };
@@ -996,11 +1069,13 @@ async fn test_get_epoch_ending_ledger_infos_invalid() {
     // Test invalid ranges and chunks that are too large
     let max_epoch_chunk_size = StorageServiceConfig::default().max_epoch_chunk_size;
     let start_epoch = 11;
+    let use_compression = true;
     for expected_end_epoch in [10, start_epoch + max_epoch_chunk_size] {
         let request =
             StorageServiceRequest::GetEpochEndingLedgerInfos(EpochEndingLedgerInfoRequest {
                 start_epoch,
                 expected_end_epoch,
+                use_compression,
             });
 
         // Process and verify the response
@@ -1142,11 +1217,13 @@ async fn send_new_transaction_output_request(
     mock_client: &mut MockClient,
     known_version: u64,
     known_epoch: u64,
+    use_compression: bool,
 ) -> Receiver<Result<bytes::Bytes, network::protocols::network::RpcError>> {
     let request = StorageServiceRequest::GetNewTransactionOutputsWithProof(
         NewTransactionOutputsWithProofRequest {
             known_version,
             known_epoch,
+            use_compression,
         },
     );
     mock_client.send_request(request).await
@@ -1158,12 +1235,14 @@ async fn send_new_transaction_request(
     known_version: u64,
     known_epoch: u64,
     include_events: bool,
+    use_compression: bool,
 ) -> Receiver<Result<bytes::Bytes, network::protocols::network::RpcError>> {
     let request =
         StorageServiceRequest::GetNewTransactionsWithProof(NewTransactionsWithProofRequest {
             known_version,
             known_epoch,
             include_events,
+            use_compression,
         });
     mock_client.send_request(request).await
 }
@@ -1349,46 +1428,46 @@ fn create_transaction_list_with_proof(
 }
 
 /// Verifies that a new transaction outputs with proof response is received
-/// and that the response contains the correct data.
-async fn verify_new_transaction_outputs_with_proof(
+/// and that the response contains the correct raw data.
+async fn verify_new_transaction_outputs_with_proof_raw(
     mock_client: &mut MockClient,
     receiver: Receiver<Result<bytes::Bytes, network::protocols::network::RpcError>>,
     output_list_with_proof: TransactionOutputListWithProof,
     expected_ledger_info: LedgerInfoWithSignatures,
 ) {
     match mock_client.wait_for_response(receiver).await.unwrap() {
-        StorageServiceResponse::NewTransactionOutputsWithProof((
-            outputs_with_proof,
-            ledger_info,
-        )) => {
+        StorageServiceResponse::NewTransactionOutputsWithProof(
+            NewTransactionOutputsWithProofResponse::RawResponse((outputs_with_proof, ledger_info)),
+        ) => {
             assert_eq!(outputs_with_proof, output_list_with_proof);
             assert_eq!(ledger_info, expected_ledger_info);
         }
-        response => panic!(
-            "Expected new transaction outputs with proof but got: {:?}",
-            response
-        ),
-    };
+        response => {
+            panic!(
+                "Expected new transaction outputs with proof (raw) but got: {:?}",
+                response
+            );
+        }
+    }
 }
 
 /// Verifies that a new transactions with proof response is received
-/// and that the response contains the correct data.
-async fn verify_new_transactions_with_proof(
+/// and that the response contains the correct raw data.
+async fn verify_new_transactions_with_proof_raw(
     mock_client: &mut MockClient,
     receiver: Receiver<Result<bytes::Bytes, network::protocols::network::RpcError>>,
     expected_transactions_with_proof: TransactionListWithProof,
     expected_ledger_info: LedgerInfoWithSignatures,
 ) {
     match mock_client.wait_for_response(receiver).await.unwrap() {
-        StorageServiceResponse::NewTransactionsWithProof((
-            transactions_with_proof,
-            ledger_info,
-        )) => {
+        StorageServiceResponse::NewTransactionsWithProof(
+            NewTransactionsWithProofResponse::RawResponse((transactions_with_proof, ledger_info)),
+        ) => {
             assert_eq!(transactions_with_proof, expected_transactions_with_proof);
             assert_eq!(ledger_info, expected_ledger_info);
         }
         response => panic!(
-            "Expected new transaction with proof but got: {:?}",
+            "Expected new transaction with proof (raw) but got: {:?}",
             response
         ),
     };
