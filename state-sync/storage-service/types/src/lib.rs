@@ -3,8 +3,8 @@
 
 #![forbid(unsafe_code)]
 
-use requests::StorageServiceRequest;
-use responses::StorageServiceResponse;
+use crate::requests::StorageServiceRequest;
+use crate::responses::StorageServiceResponse;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -13,6 +13,10 @@ pub mod responses;
 
 #[cfg(test)]
 mod tests;
+
+/// The suffix to append to data request and responses labels
+/// if the data is compressed.
+const COMPRESSION_SUFFIX_LABEL: &str = "_compressed";
 
 /// A type alias for different epochs.
 pub type Epoch = u64;

@@ -37,7 +37,7 @@ use rand::seq::SliceRandom;
 use std::{convert::TryFrom, fmt, sync::Arc, time::Duration};
 use storage_service_client::StorageServiceClient;
 use storage_service_types::requests::{
-    EpochEndingLedgerInfoRequest, NewTransactionOutputsWithProofRequest,
+    DataRequest, EpochEndingLedgerInfoRequest, NewTransactionOutputsWithProofRequest,
     NewTransactionsWithProofRequest, StateValuesWithProofRequest, StorageServiceRequest,
     TransactionOutputsWithProofRequest, TransactionsWithProofRequest,
 };
@@ -121,6 +121,11 @@ impl AptosNetDataClient {
             time_service,
         );
         (client, poller)
+    }
+
+    /// Returns true iff the client should request compressed data
+    fn use_compression(&self) -> bool {
+        self.data_client_config.use_compression
     }
 
     /// Generates a new response id
@@ -312,7 +317,7 @@ impl AptosNetDataClient {
             );
             error
         })?;
-        let _timer = start_request_timer(&metrics::REQUEST_LATENCIES, request.get_label(), peer);
+        let _timer = start_request_timer(&metrics::REQUEST_LATENCIES, &request.get_label(), peer);
         self.send_request_to_peer_and_decode(peer, request).await
     }
 
@@ -354,13 +359,13 @@ impl AptosNetDataClient {
         debug!(
             (LogSchema::new(LogEntry::StorageServiceRequest)
                 .event(LogEvent::SendRequest)
-                .request_type(request.get_label())
+                .request_type(&request.get_label())
                 .request_id(id)
                 .peer(&peer)
                 .request_data(&request))
         );
 
-        increment_request_counter(&metrics::SENT_REQUESTS, request.get_label(), peer);
+        increment_request_counter(&metrics::SENT_REQUESTS, &request.get_label(), peer);
 
         let result = self
             .network_client
@@ -376,12 +381,12 @@ impl AptosNetDataClient {
                 debug!(
                     (LogSchema::new(LogEntry::StorageServiceResponse)
                         .event(LogEvent::ResponseSuccess)
-                        .request_type(request.get_label())
+                        .request_type(&request.get_label())
                         .request_id(id)
                         .peer(&peer))
                 );
 
-                increment_request_counter(&metrics::SUCCESS_RESPONSES, request.get_label(), peer);
+                increment_request_counter(&metrics::SUCCESS_RESPONSES, &request.get_label(), peer);
 
                 // For now, record all responses that at least pass the data
                 // client layer successfully. An alternative might also have the
@@ -423,7 +428,7 @@ impl AptosNetDataClient {
                 error!(
                     (LogSchema::new(LogEntry::StorageServiceResponse)
                         .event(LogEvent::ResponseError)
-                        .request_type(request.get_label())
+                        .request_type(&request.get_label())
                         .request_id(id)
                         .peer(&peer)
                         .error(&client_error))
@@ -466,12 +471,13 @@ impl AptosDataClient for AptosNetDataClient {
         start_epoch: Epoch,
         expected_end_epoch: Epoch,
     ) -> Result<Response<Vec<LedgerInfoWithSignatures>>> {
-        let request =
-            StorageServiceRequest::GetEpochEndingLedgerInfos(EpochEndingLedgerInfoRequest {
-                start_epoch,
-                expected_end_epoch,
-            });
-        let response: Response<EpochChangeProof> = self.send_request_and_decode(request).await?;
+        let data_request = DataRequest::GetEpochEndingLedgerInfos(EpochEndingLedgerInfoRequest {
+            start_epoch,
+            expected_end_epoch,
+        });
+        let storage_request = StorageServiceRequest::new(data_request, self.use_compression());
+        let response: Response<EpochChangeProof> =
+            self.send_request_and_decode(storage_request).await?;
         Ok(response.map(|epoch_change| epoch_change.ledger_info_with_sigs))
     }
 
@@ -480,13 +486,13 @@ impl AptosDataClient for AptosNetDataClient {
         known_version: Version,
         known_epoch: Epoch,
     ) -> Result<Response<(TransactionOutputListWithProof, LedgerInfoWithSignatures)>> {
-        let request = StorageServiceRequest::GetNewTransactionOutputsWithProof(
-            NewTransactionOutputsWithProofRequest {
+        let data_request =
+            DataRequest::GetNewTransactionOutputsWithProof(NewTransactionOutputsWithProofRequest {
                 known_version,
                 known_epoch,
-            },
-        );
-        self.send_request_and_decode(request).await
+            });
+        let storage_request = StorageServiceRequest::new(data_request, self.use_compression());
+        self.send_request_and_decode(storage_request).await
     }
 
     async fn get_new_transactions_with_proof(
@@ -495,18 +501,20 @@ impl AptosDataClient for AptosNetDataClient {
         known_epoch: Epoch,
         include_events: bool,
     ) -> Result<Response<(TransactionListWithProof, LedgerInfoWithSignatures)>> {
-        let request =
-            StorageServiceRequest::GetNewTransactionsWithProof(NewTransactionsWithProofRequest {
+        let data_request =
+            DataRequest::GetNewTransactionsWithProof(NewTransactionsWithProofRequest {
                 known_version,
                 known_epoch,
                 include_events,
             });
-        self.send_request_and_decode(request).await
+        let storage_request = StorageServiceRequest::new(data_request, self.use_compression());
+        self.send_request_and_decode(storage_request).await
     }
 
     async fn get_number_of_states(&self, version: Version) -> Result<Response<u64>> {
-        let request = StorageServiceRequest::GetNumberOfStatesAtVersion(version);
-        self.send_request_and_decode(request).await
+        let data_request = DataRequest::GetNumberOfStatesAtVersion(version);
+        let storage_request = StorageServiceRequest::new(data_request, self.use_compression());
+        self.send_request_and_decode(storage_request).await
     }
 
     async fn get_state_values_with_proof(
@@ -515,12 +523,13 @@ impl AptosDataClient for AptosNetDataClient {
         start_index: u64,
         end_index: u64,
     ) -> Result<Response<StateValueChunkWithProof>> {
-        let request = StorageServiceRequest::GetStateValuesWithProof(StateValuesWithProofRequest {
+        let data_request = DataRequest::GetStateValuesWithProof(StateValuesWithProofRequest {
             version,
             start_index,
             end_index,
         });
-        self.send_request_and_decode(request).await
+        let storage_request = StorageServiceRequest::new(data_request, self.use_compression());
+        self.send_request_and_decode(storage_request).await
     }
 
     async fn get_transaction_outputs_with_proof(
@@ -529,14 +538,14 @@ impl AptosDataClient for AptosNetDataClient {
         start_version: Version,
         end_version: Version,
     ) -> Result<Response<TransactionOutputListWithProof>> {
-        let request = StorageServiceRequest::GetTransactionOutputsWithProof(
-            TransactionOutputsWithProofRequest {
+        let data_request =
+            DataRequest::GetTransactionOutputsWithProof(TransactionOutputsWithProofRequest {
                 proof_version,
                 start_version,
                 end_version,
-            },
-        );
-        self.send_request_and_decode(request).await
+            });
+        let storage_request = StorageServiceRequest::new(data_request, self.use_compression());
+        self.send_request_and_decode(storage_request).await
     }
 
     async fn get_transactions_with_proof(
@@ -546,14 +555,14 @@ impl AptosDataClient for AptosNetDataClient {
         end_version: Version,
         include_events: bool,
     ) -> Result<Response<TransactionListWithProof>> {
-        let request =
-            StorageServiceRequest::GetTransactionsWithProof(TransactionsWithProofRequest {
-                proof_version,
-                start_version,
-                end_version,
-                include_events,
-            });
-        self.send_request_and_decode(request).await
+        let data_request = DataRequest::GetTransactionsWithProof(TransactionsWithProofRequest {
+            proof_version,
+            start_version,
+            end_version,
+            include_events,
+        });
+        let storage_request = StorageServiceRequest::new(data_request, self.use_compression());
+        self.send_request_and_decode(storage_request).await
     }
 }
 
@@ -722,13 +731,17 @@ pub(crate) fn poll_peer(
         // Start the peer polling timer
         let timer = start_request_timer(
             &metrics::REQUEST_LATENCIES,
-            StorageServiceRequest::GetStorageServerSummary.get_label(),
+            DataRequest::GetStorageServerSummary.get_label(),
             peer,
         );
 
         // Fetch the storage summary for the peer and stop the timer
+        let request = StorageServiceRequest::new(
+            DataRequest::GetStorageServerSummary,
+            data_client.use_compression(),
+        );
         let result: Result<StorageServerSummary> = data_client
-            .send_request_to_peer_and_decode(peer, StorageServiceRequest::GetStorageServerSummary)
+            .send_request_to_peer_and_decode(peer, request)
             .await
             .map(Response::into_payload);
         drop(timer);
