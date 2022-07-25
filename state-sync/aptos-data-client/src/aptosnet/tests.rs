@@ -39,6 +39,7 @@ use storage_service_types::requests::{
 };
 use storage_service_types::responses::{
     CompleteDataRange, DataSummary, ProtocolMetadata, StorageServerSummary, StorageServiceResponse,
+    TransactionsWithProofResponse,
 };
 use storage_service_types::{StorageServiceError, StorageServiceMessage};
 
@@ -201,6 +202,70 @@ impl MockNetwork {
 }
 
 #[tokio::test]
+async fn disable_compression() {
+    ::aptos_logger::Logger::init_for_testing();
+
+    let data_client_config = AptosDataClientConfig {
+        use_compression: false,
+        ..Default::default()
+    };
+    let (mut mock_network, mock_time, client, poller) =
+        MockNetwork::new(None, Some(data_client_config), None);
+
+    tokio::spawn(poller.start_poller());
+
+    // Add a connected peer
+    let expected_peer = mock_network.add_peer(true);
+
+    // Advance time so the poller sends a data summary request
+    tokio::task::yield_now().await;
+    mock_time.advance_async(Duration::from_millis(1_000)).await;
+
+    // Receive their request and fulfill it
+    let (peer, protocol, request, response_sender) = mock_network.next_request().await.unwrap();
+    assert_eq!(peer, expected_peer.peer_id());
+    assert_eq!(protocol, ProtocolId::StorageServiceRpc);
+    assert_matches!(request, StorageServiceRequest::GetStorageServerSummary);
+
+    let summary = mock_storage_summary(200);
+    response_sender.send(Ok(StorageServiceResponse::StorageServerSummary(summary)));
+
+    // Let the poller finish processing the response
+    tokio::task::yield_now().await;
+
+    // Handle the client's transactions request
+    tokio::spawn(async move {
+        let (peer, protocol, request, response_sender) = mock_network.next_request().await.unwrap();
+
+        assert_eq!(peer, expected_peer.peer_id());
+        assert_eq!(protocol, ProtocolId::StorageServiceRpc);
+        assert_matches!(
+            request,
+            StorageServiceRequest::GetTransactionsWithProof(TransactionsWithProofRequest {
+                start_version: 50,
+                end_version: 100,
+                proof_version: 100,
+                include_events: false,
+                use_compression: false,
+            })
+        );
+
+        response_sender.send(Ok(StorageServiceResponse::TransactionsWithProof(
+            TransactionsWithProofResponse::new(TransactionListWithProof::new_empty(), false)
+                .unwrap(),
+        )));
+    });
+
+    // The client's request should succeed since a peer finally has advertised
+    // data for this range.
+    let response = client
+        .get_transactions_with_proof(100, 50, 100, false)
+        .await
+        .unwrap();
+    assert_eq!(response.payload, TransactionListWithProof::new_empty());
+}
+
+#[tokio::test]
 async fn request_works_only_when_data_available() {
     ::aptos_logger::Logger::init_for_testing();
     let (mut mock_network, mock_time, client, poller) = MockNetwork::new(None, None, None);
@@ -254,11 +319,13 @@ async fn request_works_only_when_data_available() {
                 end_version: 100,
                 proof_version: 100,
                 include_events: false,
+                use_compression: true,
             })
         );
 
         response_sender.send(Ok(StorageServiceResponse::TransactionsWithProof(
-            TransactionListWithProof::new_empty(),
+            TransactionsWithProofResponse::new(TransactionListWithProof::new_empty(), true)
+                .unwrap(),
         )));
     });
 
@@ -658,11 +725,13 @@ async fn prioritized_peer_request_selection() {
             known_version: 1023,
             known_epoch: 23,
             include_events: false,
+            use_compression: true,
         });
     let new_outputs_request = StorageServiceRequest::GetNewTransactionOutputsWithProof(
         NewTransactionOutputsWithProofRequest {
             known_version: 4504,
             known_epoch: 3,
+            use_compression: true,
         },
     );
     for storage_request in [
@@ -745,6 +814,7 @@ async fn all_peer_request_selection() {
             proof_version: 100,
             start_version: 0,
             end_version: 100,
+            use_compression: true,
         });
     assert_matches!(
         client.choose_peer_for_request(&output_data_request),
@@ -897,7 +967,8 @@ async fn bad_peer_is_eventually_banned_internal() {
             if peer == good_peer.peer_id() {
                 // Good peer responds with good response.
                 response_sender.send(Ok(StorageServiceResponse::TransactionsWithProof(
-                    TransactionListWithProof::new_empty(),
+                    TransactionsWithProofResponse::new(TransactionListWithProof::new_empty(), true)
+                        .unwrap(),
                 )));
             } else if peer == bad_peer.peer_id() {
                 // Bad peer responds with error.
@@ -963,7 +1034,8 @@ async fn bad_peer_is_eventually_banned_callback() {
     tokio::spawn(async move {
         while let Some((_, _, _, response_sender)) = mock_network.next_request().await {
             response_sender.send(Ok(StorageServiceResponse::TransactionsWithProof(
-                TransactionListWithProof::new_empty(),
+                TransactionsWithProofResponse::new(TransactionListWithProof::new_empty(), true)
+                    .unwrap(),
             )));
         }
     });
@@ -1024,8 +1096,12 @@ async fn bad_peer_is_eventually_added_back() {
             match request {
                 StorageServiceRequest::GetTransactionsWithProof(_) => {
                     response_sender.send(Ok(StorageServiceResponse::TransactionsWithProof(
-                        TransactionListWithProof::new_empty(),
-                    )))
+                        TransactionsWithProofResponse::new(
+                            TransactionListWithProof::new_empty(),
+                            true,
+                        )
+                        .unwrap(),
+                    )));
                 }
                 StorageServiceRequest::GetStorageServerSummary => response_sender.send(Ok(
                     StorageServiceResponse::StorageServerSummary(mock_storage_summary(200)),

@@ -57,8 +57,10 @@ use storage_service_types::requests::{
     TransactionOutputsWithProofRequest, TransactionsWithProofRequest,
 };
 use storage_service_types::responses::{
-    CompleteDataRange, DataSummary, ProtocolMetadata, ServerProtocolVersion, StorageServerSummary,
-    StorageServiceResponse,
+    CompleteDataRange, DataSummary, EpochEndingLedgerInfosResponse,
+    NewTransactionOutputsWithProofResponse, NewTransactionsWithProofResponse, ProtocolMetadata,
+    ServerProtocolVersion, StateValueChunkWithProofResponse, StorageServerSummary,
+    StorageServiceResponse, TransactionOutputsWithProofResponse, TransactionsWithProofResponse,
 };
 use storage_service_types::{Epoch, StorageServiceError, StorageServiceMessage};
 use tokio::time::timeout;
@@ -116,6 +118,7 @@ async fn test_cachable_requests_eviction() {
             version,
             start_index,
             end_index,
+            use_compression: true,
         });
         let _ = mock_client.process_request(request).await.unwrap();
     }
@@ -131,8 +134,83 @@ async fn test_cachable_requests_eviction() {
         version,
         start_index,
         end_index,
+        use_compression: true,
     });
     let _ = mock_client.process_request(request).await.unwrap();
+}
+
+#[tokio::test]
+async fn test_cachable_requests_compression() {
+    // Create test data
+    let start_version = 0;
+    let end_version = 454;
+    let proof_version = end_version;
+    let include_events = false;
+    let compression_options = [true, false];
+
+    // Create the mock db reader
+    let mut db_reader = create_mock_db_reader();
+    let mut expectation_sequence = Sequence::new();
+    let mut transaction_lists_with_proof = vec![];
+    for _ in compression_options {
+        // Create and save test transaction lists
+        let transaction_list_with_proof = create_transaction_list_with_proof(
+            start_version,
+            end_version,
+            proof_version,
+            include_events,
+        );
+        transaction_lists_with_proof.push(transaction_list_with_proof.clone());
+
+        // Expect the data to be fetched from storage exactly once
+        db_reader
+            .expect_get_transactions()
+            .times(1)
+            .with(
+                eq(start_version),
+                eq(end_version - start_version + 1),
+                eq(proof_version),
+                eq(include_events),
+            )
+            .return_once(move |_, _, _, _| Ok(transaction_list_with_proof))
+            .in_sequence(&mut expectation_sequence);
+    }
+
+    // Create the storage client and server
+    let (mut mock_client, service, _) = MockClient::new(Some(db_reader));
+    tokio::spawn(service.start());
+
+    // Repeatedly fetch the data and verify the responses
+    for (i, use_compression) in compression_options.iter().enumerate() {
+        for _ in 0..10 {
+            let request =
+                StorageServiceRequest::GetTransactionsWithProof(TransactionsWithProofRequest {
+                    proof_version,
+                    start_version,
+                    end_version,
+                    include_events,
+                    use_compression: *use_compression,
+                });
+
+            // Process the request
+            let response = mock_client.process_request(request).await.unwrap();
+
+            // Verify the response is correct
+            match response {
+                StorageServiceResponse::TransactionsWithProof(response) => {
+                    assert_eq!(
+                        response,
+                        TransactionsWithProofResponse::new(
+                            transaction_lists_with_proof[i].clone(),
+                            *use_compression
+                        )
+                        .unwrap()
+                    );
+                }
+                _ => panic!("Expected transactions with proof but got: {:?}", response),
+            };
+        }
+    }
 }
 
 #[tokio::test]
@@ -142,6 +220,7 @@ async fn test_cachable_requests_data_versions() {
     let end_version = 454;
     let proof_version = end_version;
     let include_events = false;
+    let use_compression = true;
 
     // Create the mock db reader
     let mut db_reader = create_mock_db_reader();
@@ -184,6 +263,7 @@ async fn test_cachable_requests_data_versions() {
                     start_version: *start_version,
                     end_version,
                     include_events,
+                    use_compression,
                 });
 
             // Process the request
@@ -192,7 +272,14 @@ async fn test_cachable_requests_data_versions() {
             // Verify the response is correct
             match response {
                 StorageServiceResponse::TransactionsWithProof(transactions_with_proof) => {
-                    assert_eq!(transactions_with_proof, transaction_lists_with_proof[i])
+                    assert_eq!(
+                        transactions_with_proof,
+                        TransactionsWithProofResponse::new(
+                            transaction_lists_with_proof[i].clone(),
+                            use_compression
+                        )
+                        .unwrap()
+                    );
                 }
                 _ => panic!("Expected transactions with proof but got: {:?}", response),
             };
@@ -257,13 +344,16 @@ async fn test_get_states_with_proof() {
             version,
             start_index,
             end_index,
+            use_compression: true,
         });
         let response = mock_client.process_request(request).await.unwrap();
 
         // Verify the response is correct
         assert_eq!(
             response,
-            StorageServiceResponse::StateValueChunkWithProof(state_value_chunk_with_proof)
+            StorageServiceResponse::StateValueChunkWithProof(
+                StateValueChunkWithProofResponse::new(state_value_chunk_with_proof, true).unwrap()
+            )
         );
     }
 }
@@ -282,6 +372,7 @@ async fn test_get_states_with_proof_invalid() {
             version: 0,
             start_index,
             end_index,
+            use_compression: true,
         });
 
         // Process and verify the response
@@ -821,6 +912,7 @@ async fn test_get_transactions_with_proof() {
                     start_version,
                     end_version,
                     include_events,
+                    use_compression: true,
                 });
 
             // Process the request
@@ -829,7 +921,11 @@ async fn test_get_transactions_with_proof() {
             // Verify the response is correct
             match response {
                 StorageServiceResponse::TransactionsWithProof(transactions_with_proof) => {
-                    assert_eq!(transactions_with_proof, transaction_list_with_proof)
+                    assert_eq!(
+                        transactions_with_proof,
+                        TransactionsWithProofResponse::new(transaction_list_with_proof, true)
+                            .unwrap()
+                    )
                 }
                 _ => panic!("Expected transactions with proof but got: {:?}", response),
             };
@@ -853,6 +949,7 @@ async fn test_get_transactions_with_proof_invalid() {
                 start_version,
                 end_version,
                 include_events: true,
+                use_compression: true,
             });
 
         // Process and verify the response
@@ -899,6 +996,7 @@ async fn test_get_transaction_outputs_with_proof() {
                 proof_version,
                 start_version,
                 end_version,
+                use_compression: true,
             },
         );
 
@@ -908,7 +1006,10 @@ async fn test_get_transaction_outputs_with_proof() {
         // Verify the response is correct
         match response {
             StorageServiceResponse::TransactionOutputsWithProof(outputs_with_proof) => {
-                assert_eq!(outputs_with_proof, output_list_with_proof)
+                assert_eq!(
+                    outputs_with_proof,
+                    TransactionOutputsWithProofResponse::new(output_list_with_proof, true).unwrap()
+                )
             }
             _ => panic!(
                 "Expected transaction outputs with proof but got: {:?}",
@@ -933,6 +1034,7 @@ async fn test_get_transaction_outputs_with_proof_invalid() {
                 proof_version: end_version,
                 start_version,
                 end_version,
+                use_compression: true,
             },
         );
 
@@ -975,6 +1077,7 @@ async fn test_get_epoch_ending_ledger_infos() {
             StorageServiceRequest::GetEpochEndingLedgerInfos(EpochEndingLedgerInfoRequest {
                 start_epoch,
                 expected_end_epoch,
+                use_compression: true,
             });
 
         // Process the request
@@ -983,7 +1086,10 @@ async fn test_get_epoch_ending_ledger_infos() {
         // Verify the response is correct
         match response {
             StorageServiceResponse::EpochEndingLedgerInfos(response_epoch_change_proof) => {
-                assert_eq!(response_epoch_change_proof, epoch_change_proof)
+                assert_eq!(
+                    response_epoch_change_proof,
+                    EpochEndingLedgerInfosResponse::new(epoch_change_proof, true).unwrap()
+                )
             }
             _ => panic!("Expected epoch ending ledger infos but got: {:?}", response),
         };
@@ -1004,6 +1110,7 @@ async fn test_get_epoch_ending_ledger_infos_invalid() {
             StorageServiceRequest::GetEpochEndingLedgerInfos(EpochEndingLedgerInfoRequest {
                 start_epoch,
                 expected_end_epoch,
+                use_compression: true,
             });
 
         // Process and verify the response
@@ -1150,6 +1257,7 @@ async fn send_new_transaction_output_request(
         NewTransactionOutputsWithProofRequest {
             known_version,
             known_epoch,
+            use_compression: true,
         },
     );
     mock_client.send_request(request).await
@@ -1167,6 +1275,7 @@ async fn send_new_transaction_request(
             known_version,
             known_epoch,
             include_events,
+            use_compression: true,
         });
     mock_client.send_request(request).await
 }
@@ -1352,7 +1461,7 @@ fn create_transaction_list_with_proof(
 }
 
 /// Verifies that a new transaction outputs with proof response is received
-/// and that the response contains the correct data.
+/// and that the response contains the correct data (raw).
 async fn verify_new_transaction_outputs_with_proof(
     mock_client: &mut MockClient,
     receiver: Receiver<Result<bytes::Bytes, network::protocols::network::RpcError>>,
@@ -1360,22 +1469,23 @@ async fn verify_new_transaction_outputs_with_proof(
     expected_ledger_info: LedgerInfoWithSignatures,
 ) {
     match mock_client.wait_for_response(receiver).await.unwrap() {
-        StorageServiceResponse::NewTransactionOutputsWithProof((
-            outputs_with_proof,
-            ledger_info,
-        )) => {
+        StorageServiceResponse::NewTransactionOutputsWithProof(
+            NewTransactionOutputsWithProofResponse::RawResponse((outputs_with_proof, ledger_info)),
+        ) => {
             assert_eq!(outputs_with_proof, output_list_with_proof);
             assert_eq!(ledger_info, expected_ledger_info);
         }
-        response => panic!(
-            "Expected new transaction outputs with proof but got: {:?}",
-            response
-        ),
-    };
+        response => {
+            panic!(
+                "Expected new transaction outputs with proof (raw) but got: {:?}",
+                response
+            );
+        }
+    }
 }
 
 /// Verifies that a new transactions with proof response is received
-/// and that the response contains the correct data.
+/// and that the response contains the correct data (raw).
 async fn verify_new_transactions_with_proof(
     mock_client: &mut MockClient,
     receiver: Receiver<Result<bytes::Bytes, network::protocols::network::RpcError>>,
@@ -1383,15 +1493,14 @@ async fn verify_new_transactions_with_proof(
     expected_ledger_info: LedgerInfoWithSignatures,
 ) {
     match mock_client.wait_for_response(receiver).await.unwrap() {
-        StorageServiceResponse::NewTransactionsWithProof((
-            transactions_with_proof,
-            ledger_info,
-        )) => {
+        StorageServiceResponse::NewTransactionsWithProof(
+            NewTransactionsWithProofResponse::RawResponse((transactions_with_proof, ledger_info)),
+        ) => {
             assert_eq!(transactions_with_proof, expected_transactions_with_proof);
             assert_eq!(ledger_info, expected_ledger_info);
         }
         response => panic!(
-            "Expected new transaction with proof but got: {:?}",
+            "Expected new transaction with proof (raw) but got: {:?}",
             response
         ),
     };

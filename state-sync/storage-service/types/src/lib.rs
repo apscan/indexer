@@ -8,6 +8,8 @@ use responses::StorageServiceResponse;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+pub mod compression;
+mod metrics;
 pub mod requests;
 pub mod responses;
 

@@ -470,6 +470,7 @@ impl AptosDataClient for AptosNetDataClient {
             StorageServiceRequest::GetEpochEndingLedgerInfos(EpochEndingLedgerInfoRequest {
                 start_epoch,
                 expected_end_epoch,
+                use_compression: self.data_client_config.use_compression,
             });
         let response: Response<EpochChangeProof> = self.send_request_and_decode(request).await?;
         Ok(response.map(|epoch_change| epoch_change.ledger_info_with_sigs))
@@ -484,6 +485,7 @@ impl AptosDataClient for AptosNetDataClient {
             NewTransactionOutputsWithProofRequest {
                 known_version,
                 known_epoch,
+                use_compression: self.data_client_config.use_compression,
             },
         );
         self.send_request_and_decode(request).await
@@ -500,6 +502,7 @@ impl AptosDataClient for AptosNetDataClient {
                 known_version,
                 known_epoch,
                 include_events,
+                use_compression: self.data_client_config.use_compression,
             });
         self.send_request_and_decode(request).await
     }
@@ -519,6 +522,7 @@ impl AptosDataClient for AptosNetDataClient {
             version,
             start_index,
             end_index,
+            use_compression: self.data_client_config.use_compression,
         });
         self.send_request_and_decode(request).await
     }
@@ -534,6 +538,7 @@ impl AptosDataClient for AptosNetDataClient {
                 proof_version,
                 start_version,
                 end_version,
+                use_compression: self.data_client_config.use_compression,
             },
         );
         self.send_request_and_decode(request).await
@@ -552,6 +557,7 @@ impl AptosDataClient for AptosNetDataClient {
                 start_version,
                 end_version,
                 include_events,
+                use_compression: self.data_client_config.use_compression,
             });
         self.send_request_and_decode(request).await
     }

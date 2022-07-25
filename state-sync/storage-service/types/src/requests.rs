@@ -22,15 +22,51 @@ impl StorageServiceRequest {
     /// Returns a summary label for the request
     pub fn get_label(&self) -> &'static str {
         match self {
-            Self::GetEpochEndingLedgerInfos(_) => "get_epoch_ending_ledger_infos",
-            Self::GetNewTransactionOutputsWithProof(_) => "get_new_transaction_outputs_with_proof",
-            Self::GetNewTransactionsWithProof(_) => "get_new_transactions_with_proof",
+            Self::GetEpochEndingLedgerInfos(request) => {
+                if request.use_compression {
+                    "get_epoch_ending_ledger_infos_compressed"
+                } else {
+                    "get_epoch_ending_ledger_infos"
+                }
+            }
+            Self::GetNewTransactionOutputsWithProof(request) => {
+                if request.use_compression {
+                    "get_new_transaction_outputs_with_proof_compressed"
+                } else {
+                    "get_new_transaction_outputs_with_proof"
+                }
+            }
+            Self::GetNewTransactionsWithProof(request) => {
+                if request.use_compression {
+                    "get_new_transactions_with_proof_compressed"
+                } else {
+                    "get_new_transactions_with_proof"
+                }
+            }
             Self::GetNumberOfStatesAtVersion(_) => "get_number_of_states_at_version",
             Self::GetServerProtocolVersion => "get_server_protocol_version",
-            Self::GetStateValuesWithProof(_) => "get_state_values_with_proof",
+            Self::GetStateValuesWithProof(request) => {
+                if request.use_compression {
+                    "get_state_values_with_proof_compressed"
+                } else {
+                    "get_state_values_with_proof"
+                }
+            }
             Self::GetStorageServerSummary => "get_storage_server_summary",
-            Self::GetTransactionOutputsWithProof(_) => "get_transaction_outputs_with_proof",
-            Self::GetTransactionsWithProof(_) => "get_transactions_with_proof",
+            Self::GetTransactionOutputsWithProof(request) => {
+                if request.use_compression {
+                    "get_transaction_outputs_with_proof_compressed"
+                } else {
+                    "get_transaction_outputs_with_proof"
+                }
+            }
+            Self::GetTransactionsWithProof(request) => {
+                if request.use_compression {
+                    "get_transactions_with_proof_compressed"
+                } else {
+                    "get_transactions_with_proof"
+                }
+            }
         }
     }
 
@@ -47,51 +83,57 @@ impl StorageServiceRequest {
 /// A storage service request for fetching a list of epoch ending ledger infos.
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct EpochEndingLedgerInfoRequest {
-    pub start_epoch: u64,
-    pub expected_end_epoch: u64,
+    pub start_epoch: u64,        // The epoch to start at
+    pub expected_end_epoch: u64, // The epoch to finish at
+    pub use_compression: bool,   // Whether or not to use data compression
 }
 
 /// A storage service request for fetching a new transaction output list
 /// beyond the already known version and epoch.
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct NewTransactionOutputsWithProofRequest {
-    pub known_version: u64, // The highest known output version
-    pub known_epoch: u64,   // The highest known epoch
+    pub known_version: u64,    // The highest known output version
+    pub known_epoch: u64,      // The highest known epoch
+    pub use_compression: bool, // Whether or not to use data compression
 }
 
 /// A storage service request for fetching a new transaction list
 /// beyond the already known version and epoch.
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct NewTransactionsWithProofRequest {
-    pub known_version: u64,   // The highest known transaction version
-    pub known_epoch: u64,     // The highest known epoch
-    pub include_events: bool, // Whether or not to include events in the response
+    pub known_version: u64,    // The highest known transaction version
+    pub known_epoch: u64,      // The highest known epoch
+    pub include_events: bool,  // Whether or not to include events in the response
+    pub use_compression: bool, // Whether or not to use data compression
 }
 
 /// A storage service request for fetching a list of state
 /// values at a specified version.
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct StateValuesWithProofRequest {
-    pub version: u64,     // The version to fetch the state values at
-    pub start_index: u64, // The index to start fetching state values (inclusive)
-    pub end_index: u64,   // The index to stop fetching state values (inclusive)
+    pub version: u64,          // The version to fetch the state values at
+    pub start_index: u64,      // The index to start fetching state values (inclusive)
+    pub end_index: u64,        // The index to stop fetching state values (inclusive)
+    pub use_compression: bool, // Whether or not to use data compression
 }
 
 /// A storage service request for fetching a transaction output list with a
 /// corresponding proof.
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct TransactionOutputsWithProofRequest {
-    pub proof_version: u64, // The version the proof should be relative to
-    pub start_version: u64, // The starting version of the transaction output list
-    pub end_version: u64,   // The ending version of the transaction output list (inclusive)
+    pub proof_version: u64,    // The version the proof should be relative to
+    pub start_version: u64,    // The starting version of the transaction output list
+    pub end_version: u64,      // The ending version of the transaction output list (inclusive)
+    pub use_compression: bool, // Whether or not to use data compression
 }
 
 /// A storage service request for fetching a transaction list with a
 /// corresponding proof.
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct TransactionsWithProofRequest {
-    pub proof_version: u64,   // The version the proof should be relative to
-    pub start_version: u64,   // The starting version of the transaction list
-    pub end_version: u64,     // The ending version of the transaction list (inclusive)
-    pub include_events: bool, // Whether or not to include events in the response
+    pub proof_version: u64,    // The version the proof should be relative to
+    pub start_version: u64,    // The starting version of the transaction list
+    pub end_version: u64,      // The ending version of the transaction list (inclusive)
+    pub include_events: bool,  // Whether or not to include events in the response
+    pub use_compression: bool, // Whether or not to use data compression
 }
