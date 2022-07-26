@@ -1,3 +1,6 @@
+// Copyright (c) Aptos
+// SPDX-License-Identifier: Apache-2.0
+
 //! This file implements a proof-of-knowledge for the private key associated with an Ed25519 public key.
 //!
 //! # Examples
@@ -18,12 +21,10 @@
 //! assert!(kp.public_key.verify_proof_of_knowledge(&pok).is_ok());
 //! ```
 
-use curve25519_dalek::edwards::CompressedEdwardsY;
-use aptos_crypto_derive::{
-    BCSCryptoHash, CryptoHasher,
-};
-use serde::{Deserialize, Serialize};
 use crate::ed25519::Ed25519PublicKey;
+use aptos_crypto_derive::{BCSCryptoHash, CryptoHasher};
+use curve25519_dalek::edwards::CompressedEdwardsY;
+use serde::{Deserialize, Serialize};
 
 /// The challenge message for a proof-of-knowledge (PoK) of an Ed25519 private key
 #[derive(Debug, Serialize, Deserialize, CryptoHasher, BCSCryptoHash)]
