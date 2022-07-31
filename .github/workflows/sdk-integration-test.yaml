@@ -33,14 +33,24 @@ jobs:
 
       - run: docker run --rm -p 8080:8080 -p 8081:8081 --name=local-testnet --detach ${{ secrets.GCP_DOCKER_ARTIFACT_REPO }}/tools:${{ inputs.GIT_SHA }} aptos node run-local-testnet --with-faucet 
 
-      # Run package install, test, build
-      - run: cd ./ecosystem/typescript/sdk && yarn install
-      - run: cd ./ecosystem/typescript/sdk && yarn test
-      - run: cd ./ecosystem/typescript/sdk && yarn build
-      # Run example code in typescript
-      - run: cd ./ecosystem/typescript/sdk/examples/typescript && yarn install && yarn test
-      # Run example code in javascript
-      - run: cd ./ecosystem/typescript/sdk/examples/javascript && yarn install && yarn test
+      # Run package install, test, build: v0
+      - run: cd ./ecosystem/typescript/sdk/v0 && yarn install
+      - run: cd ./ecosystem/typescript/sdk/v0 && yarn test
+      - run: cd ./ecosystem/typescript/sdk/v0 && yarn build
+      # Run example code in typescript: v0
+      - run: cd ./ecosystem/typescript/sdk/v0/examples/typescript && yarn install && yarn test
+      # Run example code in javascript: v0
+      - run: cd ./ecosystem/typescript/sdk/v0/examples/javascript && yarn install && yarn test
+
+
+      # Run package install, test, build: v1
+      - run: cd ./ecosystem/typescript/sdk/v1 && yarn install
+      - run: cd ./ecosystem/typescript/sdk/v1 && yarn test
+      - run: cd ./ecosystem/typescript/sdk/v1 && yarn build
+      # Run example code in typescript: v1
+      - run: cd ./ecosystem/typescript/sdk/v1/examples/typescript && yarn install && yarn test
+      # Run example code in javascript: v1
+      - run: cd ./ecosystem/typescript/sdk/v1/examples/javascript && yarn install && yarn test
 
       - name: print docker-compose testnet logs when previous steps failed
         if: ${{ failure() }}

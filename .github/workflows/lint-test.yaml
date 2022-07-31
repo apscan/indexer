@@ -36,13 +36,20 @@ jobs:
       - uses: actions/setup-node@v3
         with:
           node-version-file: .node-version
-      # install packages for examples
-      - run: cd ./ecosystem/typescript/sdk/examples/typescript && yarn install
-      - run: cd ./ecosystem/typescript/sdk/examples/javascript && yarn install
-      # Run package build+lint + tests
-      - run: cd ./ecosystem/typescript/sdk && yarn install
-      - run: cd ./ecosystem/typescript/sdk && yarn lint
-      - run: cd ./ecosystem/typescript/sdk && yarn fmt:check
+      # install packages for examples: v0
+      - run: cd ./ecosystem/typescript/sdk/v0/examples/typescript && yarn install
+      - run: cd ./ecosystem/typescript/sdk/v0/examples/javascript && yarn install
+      # install packages for examples: v1
+      - run: cd ./ecosystem/typescript/sdk/v1/examples/typescript && yarn install
+      - run: cd ./ecosystem/typescript/sdk/v1/examples/javascript && yarn install
+      # Run package build+lint + tests: v0
+      - run: cd ./ecosystem/typescript/sdk/v0 && yarn install
+      - run: cd ./ecosystem/typescript/sdk/v0 && yarn lint
+      - run: cd ./ecosystem/typescript/sdk/v0 && yarn fmt:check
+      # Run package build+lint + tests: v1
+      - run: cd ./ecosystem/typescript/sdk/v1 && yarn install
+      - run: cd ./ecosystem/typescript/sdk/v1 && yarn lint
+      - run: cd ./ecosystem/typescript/sdk/v1 && yarn fmt:check
       # Run typescript indexer server linting
       - run: cd ./ecosystem/indexer-server/typescript && yarn install
       - run: cd ./ecosystem/indexer-server/typescript && yarn lint

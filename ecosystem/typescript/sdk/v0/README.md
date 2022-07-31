@@ -49,7 +49,6 @@ $  npx swagger-typescript-api@latest -p ../../../api/doc/v0/openapi.yaml -o ./sr
 ```
 
 #### Changes to make after generation:
-
 - OpenAPI/SpecHTML routes/types deleted as they're unneeded.
 - There are a few type errors in the `http-client.ts` as the axios types are incomplete, that were fixed
   via `// @ts-ignore`
