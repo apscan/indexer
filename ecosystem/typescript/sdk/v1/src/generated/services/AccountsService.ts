@@ -19,16 +19,15 @@ export class AccountsService {
     /**
      * Get account
      * Return high level information about an account such as its sequence number.
+     * @param address
+     * @param ledgerVersion
      * @returns AccountData
      * @throws ApiError
      */
-    public getAccount({
-        address,
-        ledgerVersion,
-    }: {
-        address: Address,
+    public getAccount(
+        address: HexString,
         ledgerVersion?: U64,
-    }): CancelablePromise<AccountData> {
+    ): CancelablePromise<AccountData> {
         return this.httpRequest.request({
             method: 'GET',
             url: '/accounts/{address}',
@@ -49,16 +48,15 @@ export class AccountsService {
      *
      * The Aptos nodes prune account state history, via a configurable time window (link).
      * If the requested data has been pruned, the server responds with a 404.
+     * @param address
+     * @param ledgerVersion
      * @returns MoveResource
      * @throws ApiError
      */
-    public getAccountResources({
-        address,
-        ledgerVersion,
-    }: {
-        address: Address,
+    public getAccountResources(
+        address: HexString,
         ledgerVersion?: U64,
-    }): CancelablePromise<Array<MoveResource>> {
+    ): CancelablePromise<Array<MoveResource>> {
         return this.httpRequest.request({
             method: 'GET',
             url: '/accounts/{address}/resources',
@@ -79,16 +77,15 @@ export class AccountsService {
      *
      * The Aptos nodes prune account state history, via a configurable time window (link).
      * If the requested data has been pruned, the server responds with a 404.
+     * @param address
+     * @param ledgerVersion
      * @returns MoveModuleBytecode
      * @throws ApiError
      */
-    public getAccountModules({
-        address,
-        ledgerVersion,
-    }: {
-        address: Address,
+    public getAccountModules(
+        address: HexString,
         ledgerVersion?: U64,
-    }): CancelablePromise<Array<MoveModuleBytecode>> {
+    ): CancelablePromise<Array<MoveModuleBytecode>> {
         return this.httpRequest.request({
             method: 'GET',
             url: '/accounts/{address}/modules',
@@ -110,18 +107,17 @@ export class AccountsService {
      *
      * The Aptos nodes prune account state history, via a configurable time window (link).
      * If the requested data has been pruned, the server responds with a 404.
+     * @param address
+     * @param resourceType
+     * @param ledgerVersion
      * @returns MoveResource
      * @throws ApiError
      */
-    public getAccountResource({
-        address,
-        resourceType,
-        ledgerVersion,
-    }: {
-        address: Address,
+    public getAccountResource(
+        address: HexString,
         resourceType: MoveStructTagParam,
         ledgerVersion?: U64,
-    }): CancelablePromise<MoveResource> {
+    ): CancelablePromise<MoveResource> {
         return this.httpRequest.request({
             method: 'GET',
             url: '/accounts/{address}/resource/{resource_type}',
@@ -144,18 +140,17 @@ export class AccountsService {
      *
      * The Aptos nodes prune account state history, via a configurable time window (link).
      * If the requested data has been pruned, the server responds with a 404.
+     * @param address
+     * @param moduleName
+     * @param ledgerVersion
      * @returns MoveModuleBytecode
      * @throws ApiError
      */
-    public getAccountModule({
-        address,
-        moduleName,
-        ledgerVersion,
-    }: {
-        address: Address,
+    public getAccountModule(
+        address: HexString,
         moduleName: IdentifierWrapper,
         ledgerVersion?: U64,
-    }): CancelablePromise<MoveModuleBytecode> {
+    ): CancelablePromise<MoveModuleBytecode> {
         return this.httpRequest.request({
             method: 'GET',
             url: '/accounts/{address}/module/{module_name}',

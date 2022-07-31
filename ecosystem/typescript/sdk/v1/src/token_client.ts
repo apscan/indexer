@@ -4,6 +4,7 @@ import * as TokenTypes from "./token_types";
 import * as lodash from "lodash";
 import * as Gen from "./generated/index";
 import { HexString, MaybeHexString } from "./hex_string";
+import { moveStructTagToParam } from "./util";
 
 /**
  * Class for creating, minting and managing minting NFT collections and tokens
@@ -26,12 +27,12 @@ export class TokenClient {
    * @returns Promise that resolves to transaction hash
    */
   async submitTransactionHelper(account: AptosAccount, payload: Gen.TransactionPayload) {
-    const txnRequest = await this.aptosClient.generateTransaction(account.address(), payload, {
+    const txnRequest = await this.aptosClient.helpers.generateTransaction(account.address(), payload, {
       max_gas_amount: "4000",
     });
-    const signedTxn = await this.aptosClient.signTransaction(account, txnRequest);
-    const res = await this.aptosClient.submitTransaction(signedTxn);
-    await this.aptosClient.waitForTransaction(res.hash);
+    const signedTxn = await this.aptosClient.helpers.signTransaction(account, txnRequest);
+    const res = await this.aptosClient.transactions.submitTransaction(signedTxn);
+    await this.aptosClient.helpers.waitForTransaction(res.hash);
     return Promise.resolve(res.hash);
   }
 
@@ -233,7 +234,7 @@ export class TokenClient {
    * ```
    */
   async getCollectionData(creator: MaybeHexString, collectionName: string): Promise<any> {
-    const resources = await this.aptosClient.getAccountResources(creator);
+    const resources = await this.aptosClient.accounts.getAccountResources(creator.toString());
     const accountResource: { type: Gen.MoveStructTag; data: any } = resources.find((r) =>
       lodash.isEqual(r.type, {
         address: "0x1",
@@ -249,7 +250,7 @@ export class TokenClient {
       key: collectionName,
     };
     // eslint-disable-next-line no-unused-vars
-    const collectionTable = await this.aptosClient.getTableItem(handle, getCollectionTableItemRequest);
+    const collectionTable = await this.aptosClient.tables.getTableItem(handle, getCollectionTableItemRequest);
     return collectionTable;
   }
 
@@ -281,12 +282,16 @@ export class TokenClient {
     collectionName: string,
     tokenName: string,
   ): Promise<TokenTypes.TokenData> {
-    const collection: { type: Gen.MoveStructTag; data: any } = await this.aptosClient.getAccountResource(creator, {
+    let resourceType = moveStructTagToParam({
       address: "0x1",
       module: "token",
       name: "Collections",
       generic_type_params: [],
     });
+    const collection: { type: Gen.MoveStructTag; data: any } = await this.aptosClient.accounts.getAccountResource(
+      creator.toString(),
+      resourceType,
+    );
     const { handle } = collection.data.token_data;
     const tokenId = {
       creator,
@@ -300,7 +305,9 @@ export class TokenClient {
       key: tokenId,
     };
 
-    return await this.aptosClient.getTableItem(handle, getTokenTableItemRequest);
+    // We know the response will be MoveValue, specifically the struct variant.
+    // We cast that struct to an instance of TokenData.
+    return (await this.aptosClient.tables.getTableItem(handle, getTokenTableItemRequest)) as TokenTypes.TokenData;
   }
 
   /**
@@ -326,12 +333,16 @@ export class TokenClient {
    * ```
    */
   async getTokenBalanceForAccount(account: MaybeHexString, tokenId: TokenTypes.TokenId): Promise<TokenTypes.Token> {
-    const tokenStore: { type: Gen.MoveStructTag; data: any } = await this.aptosClient.getAccountResource(account, {
+    let resourceType = moveStructTagToParam({
       address: "0x1",
       module: "token",
       name: "TokenStore",
       generic_type_params: [],
     });
+    const tokenStore: { type: Gen.MoveStructTag; data: any } = await this.aptosClient.accounts.getAccountResource(
+      account.toString(),
+      resourceType,
+    );
     const { handle } = tokenStore.data.tokens;
 
     const getTokenTableItemRequest: Gen.TableItemRequest = {
@@ -340,6 +351,6 @@ export class TokenClient {
       key: tokenId,
     };
 
-    return await this.aptosClient.getTableItem(handle, getTokenTableItemRequest);
+    return (await this.aptosClient.tables.getTableItem(handle, getTokenTableItemRequest)) as TokenTypes.Token;
   }
 }

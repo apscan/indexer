@@ -34,10 +34,10 @@ export class FaucetClient extends AptosClient {
     const response = await axios.post<Array<string>>(url, {}, { validateStatus: () => true });
 
     const tnxHashes = response.data;
-    const promises = [];
+    const promises: Promise<void>[] = [];
     for (let i = 0; i < tnxHashes.length; i += 1) {
       const tnxHash = tnxHashes[i];
-      promises.push(this.waitForTransaction(tnxHash));
+      promises.push(this.helpers.waitForTransaction(tnxHash));
     }
     await Promise.all(promises);
     return tnxHashes;

@@ -11,5 +11,7 @@ export async function sleep(timeMs: number): Promise<null> {
 }
 
 export function moveStructTagToParam(moveStructTag: Gen.MoveStructTag): Gen.MoveStructTagParam {
-  return `${moveStructTag.address}::${moveStructTag.module}::${moveStructTag.name}<${moveStructTag.generic_type_params.join(',')}>`;
+  return `${moveStructTag.address}::${moveStructTag.module}::${
+    moveStructTag.name
+  }<${moveStructTag.generic_type_params.join(",")}>`;
 }

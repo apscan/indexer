@@ -22,16 +22,15 @@ export class TransactionsService {
      * Get transactions
      * Get on-chain (meaning, committed) transactions. You may specify from
      * when you want the transactions and how to include in the response.
+     * @param start
+     * @param limit
      * @returns Transaction
      * @throws ApiError
      */
-    public getTransactions({
-        start,
-        limit,
-    }: {
+    public getTransactions(
         start?: U64,
         limit?: number,
-    }): CancelablePromise<Array<Transaction>> {
+    ): CancelablePromise<Array<Transaction>> {
         return this.httpRequest.request({
             method: 'GET',
             url: '/transactions',
@@ -59,14 +58,13 @@ export class TransactionsService {
      *
      * To submit a transaction as BCS, you must submit a SignedTransaction
      * encoded as BCS. See SignedTransaction in types/src/transaction/mod.rs.
+     * @param requestBody
      * @returns PendingTransaction
      * @throws ApiError
      */
-    public submitTransaction({
-        requestBody,
-    }: {
+    public submitTransaction(
         requestBody: SubmitTransactionRequest,
-    }): CancelablePromise<PendingTransaction> {
+    ): CancelablePromise<PendingTransaction> {
         return this.httpRequest.request({
             method: 'POST',
             url: '/transactions',
@@ -88,14 +86,13 @@ export class TransactionsService {
      * 1. Hash message bytes: "RawTransaction" bytes + BCS bytes of [Transaction](https://aptos-labs.github.io/aptos-core/aptos_types/transaction/enum.Transaction.html).
      * 2. Apply hash algorithm `SHA3-256` to the hash message bytes.
      * 3. Hex-encode the hash bytes with `0x` prefix.
+     * @param txnHash
      * @returns Transaction
      * @throws ApiError
      */
-    public getTransactionByHash({
-        txnHash,
-    }: {
+    public getTransactionByHash(
         txnHash: HashValue,
-    }): CancelablePromise<Transaction> {
+    ): CancelablePromise<Transaction> {
         return this.httpRequest.request({
             method: 'GET',
             url: '/transactions/by_hash/{txn_hash}',
@@ -108,14 +105,13 @@ export class TransactionsService {
     /**
      * Get transaction by version
      * todo
+     * @param txnVersion
      * @returns Transaction
      * @throws ApiError
      */
-    public getTransactionByVersion({
-        txnVersion,
-    }: {
+    public getTransactionByVersion(
         txnVersion: U64,
-    }): CancelablePromise<Transaction> {
+    ): CancelablePromise<Transaction> {
         return this.httpRequest.request({
             method: 'GET',
             url: '/transactions/by_version/{txn_version}',
@@ -128,18 +124,17 @@ export class TransactionsService {
     /**
      * Get account transactions
      * todo
+     * @param address
+     * @param start
+     * @param limit
      * @returns Transaction
      * @throws ApiError
      */
-    public getAccountTransactions({
-        address,
-        start,
-        limit,
-    }: {
-        address: Address,
+    public getAccountTransactions(
+        address: HexString,
         start?: U64,
         limit?: number,
-    }): CancelablePromise<Array<Transaction>> {
+    ): CancelablePromise<Array<Transaction>> {
         return this.httpRequest.request({
             method: 'GET',
             url: '/accounts/{address}/transactions',
@@ -158,14 +153,13 @@ export class TransactionsService {
      * Simulate submitting a transaction. To use this, you must:
      * - Create a SignedTransaction with a zero-padded signature.
      * - Submit a SubmitTransactionRequest containing a UserTransactionRequest containing that signature.
+     * @param requestBody
      * @returns UserTransaction
      * @throws ApiError
      */
-    public simulateTransaction({
-        requestBody,
-    }: {
+    public simulateTransaction(
         requestBody: SubmitTransactionRequest,
-    }): CancelablePromise<Array<UserTransaction>> {
+    ): CancelablePromise<Array<UserTransaction>> {
         return this.httpRequest.request({
             method: 'POST',
             url: '/transactions/simulate',
@@ -192,14 +186,13 @@ export class TransactionsService {
      * - Decode the hex encoded string in the response to bytes.
      * - Sign the bytes to create the signature.
      * - Use that as the signature field in something like Ed25519Signature, which you then use to build a TransactionSignature.
+     * @param requestBody
      * @returns HexEncodedBytes
      * @throws ApiError
      */
-    public encodeSubmission({
-        requestBody,
-    }: {
+    public encodeSubmission(
         requestBody: EncodeSubmissionRequest,
-    }): CancelablePromise<HexEncodedBytes> {
+    ): CancelablePromise<HexEncodedBytes> {
         return this.httpRequest.request({
             method: 'POST',
             url: '/transactions/encode_submission',

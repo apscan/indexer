@@ -6,6 +6,7 @@ import { HexString } from "./hex_string";
 import * as Gen from "./generated/index";
 
 import { NODE_URL, FAUCET_URL } from "./util.test";
+import { moveStructTagToParam } from "./util";
 
 const aptosCoin = {
   address: "0x1",
@@ -22,15 +23,15 @@ test(
 
     const account1 = new AptosAccount();
     const txns = await faucetClient.fundAccount(account1.address(), 5000);
-    const tx1 = await client.getTransactionByHash(txns[1]);
+    const tx1 = await client.transactions.getTransactionByHash(txns[1]);
     expect(tx1.type).toBe("user_transaction");
-    let resources = await client.getAccountResources(account1.address());
+    let resources = await client.accounts.getAccountResources(account1.address().toString());
     let accountResource = resources.find((r) => lodash.isEqual(r.type, aptosCoin));
     expect((accountResource!.data as { coin: { value: string } }).coin.value).toBe("5000");
 
     const account2 = new AptosAccount();
     await faucetClient.fundAccount(account2.address(), 0);
-    resources = await client.getAccountResources(account2.address());
+    resources = await client.accounts.getAccountResources(account2.address().toString());
     accountResource = resources.find((r) => lodash.isEqual(r.type, aptosCoin));
     expect((accountResource!.data as { coin: { value: string } }).coin.value).toBe("0");
 
@@ -47,29 +48,36 @@ test(
       arguments: [account2.address().hex(), "717"],
     };
 
-    const txnRequest = await client.generateTransaction(account1.address(), payload);
-    const signedTxn = await client.signTransaction(account1, txnRequest);
-    const transactionRes = await client.submitTransaction(signedTxn);
-    await client.waitForTransaction(transactionRes.hash);
+    const txnRequest = await client.helpers.generateTransaction(account1.address(), payload);
+    const signedTxn = await client.helpers.signTransaction(account1, txnRequest);
+    const transactionRes = await client.transactions.submitTransaction(signedTxn);
+    await client.helpers.waitForTransaction(transactionRes.hash);
 
-    resources = await client.getAccountResources(account2.address());
+    resources = await client.accounts.getAccountResources(account2.address().toString());
     accountResource = resources.find((r) => lodash.isEqual(r.type, aptosCoin));
     expect((accountResource!.data as { coin: { value: string } }).coin.value).toBe("717");
 
-    const res = await client.getAccountTransactions(account1.address(), { start: BigInt(0) });
+    const res = await client.transactions.getAccountTransactions(account1.address().toString(), "0");
     const tx = res.find((e) => e.type === "user_transaction") as Gen.UserTransaction;
     expect(new HexString(tx.sender).toShortString()).toBe(account1.address().toShortString());
 
-    const events = await client.getEventsByEventHandle(tx.sender, aptosCoin, "withdraw_events");
+    const events = await client.events.getEventsByEventHandle(
+      tx.sender,
+      moveStructTagToParam(aptosCoin),
+      "withdraw_events",
+    );
     expect(events[0].type).toBe("0x1::coin::WithdrawEvent");
 
-    const eventSubset = await client.getEventsByEventHandle(tx.sender, aptosCoin, "withdraw_events", {
-      start: BigInt(0),
-      limit: 1,
-    });
+    const eventSubset = await client.events.getEventsByEventHandle(
+      tx.sender,
+      moveStructTagToParam(aptosCoin),
+      "withdraw_events",
+      "0",
+      1,
+    );
     expect(eventSubset[0].type).toBe("0x1::coin::WithdrawEvent");
 
-    const events2 = await client.getEventsByEventKey(events[0].key);
+    const events2 = await client.events.getEventsByEventKey(events[0].key);
     expect(events2[0].type).toBe("0x1::coin::WithdrawEvent");
   },
   30 * 1000,

@@ -17,7 +17,7 @@
     "fmt:check": "yarn _fmt --check",
     "cov:clean": "rm -rf coverage",
     "changelog": "standard-version --skip.bump --skip.commit --skip.tag",
-    "generate-client": "openapi -i ../../../../api/doc/v1/spec.yaml -o ./src/generated -c axios --name AptosGeneratedClient --useOptions"
+    "generate-client": "openapi -i ../../../../api/doc/v1/spec.yaml -o ./src/generated -c axios --name AptosGeneratedClient --exportSchemas true && ./fixup.sh"
   },
   "repository": {
     "type": "git",
