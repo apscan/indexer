@@ -122,6 +122,18 @@ impl Factory for K8sFactory {
                 }
             }
         } else {
+            // try to uninstall existing resources from the namespace if they exist
+            // this is applicable when re-running Forge in an existing namespace such as when it has been explicitly kept or
+            // when a new Forge job preempts an existing one in the same namespace
+            if uninstall_testnet_resources(self.kube_namespace.clone())
+                .await
+                .is_err()
+            {
+                info!(
+                    "Could not uninstall resources from namespace {}, but will continue anyways...",
+                    self.kube_namespace
+                );
+            }
             // create the forge-management configmap before installing anything
             create_management_configmap(self.kube_namespace.clone(), self.keep).await?;
             // try installing testnet resources, but clean up if it fails

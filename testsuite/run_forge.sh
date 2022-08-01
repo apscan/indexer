@@ -292,9 +292,9 @@ get_validator_logs_link
 if [ "$FORGE_EXIT_CODE" = "0" ]; then
     FORGE_COMMENT_HEADER="### :white_check_mark: Forge test success on \`${IMAGE_TAG}\`"
 elif [ "$FORGE_EXIT_CODE" = "2" ]; then
-    FORGE_COMMENT_HEADER"### :x: Forge test perf regression on \`${IMAGE_TAG}\`"
+    FORGE_COMMENT_HEADER="### :x: Forge test perf regression on \`${IMAGE_TAG}\`"
 elif [ "$FORGE_EXIT_CODE" = "10" ]; then
-    FORGE_COMMENT_HEADER"### :thought_balloon: Forge test preempted on \`${IMAGE_TAG}\`"
+    FORGE_COMMENT_HEADER="### :thought_balloon: Forge test preempted on \`${IMAGE_TAG}\`"
     # don't actually fail if tests pre-empted
     FORGE_EXIT_CODE=0
 else
