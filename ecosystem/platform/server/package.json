@@ -13,7 +13,7 @@
     "tailwindcss": "^3.1.0"
   },
   "scripts": {
-    "build": "esbuild app/javascript/application.ts --bundle --minify --target=es2020 --sourcemap --outdir=app/assets/builds",
+    "build": "esbuild app/javascript/application.ts --bundle --minify --splitting --format=esm --target=es2020 --sourcemap --outdir=app/assets/builds",
     "build:css": "tailwindcss -i ./app/assets/stylesheets/application.tailwind.css -o ./app/assets/builds/application.css --minify",
     "failure:js": "rm ./app/assets/builds/application.js && rm ./app/assets/builds/application.js.map",
     "dev": "tsc-watch --noClear -p tsconfig.json --onSuccess \"yarn build\" --onFailure \"yarn failure:js\""
