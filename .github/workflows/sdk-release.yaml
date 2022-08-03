@@ -8,7 +8,9 @@ on:
         required: true
         type: string
         description:
-
+  push:
+    branches:
+      - rustielin/banool/finalize_ts_sdk_ci
 env:
   CARGO_INCREMENTAL: "0"
   CARGO_TERM_COLOR: always
@@ -19,6 +21,7 @@ concurrency:
   group: ${{ github.workflow }}-${{ (github.event_name == 'pull_request' && github.ref) }}
   cancel-in-progress: true
 
+jobs:
   # Confirm that the generated client within the TS SDK has been re-generated
   # if there are any changes that would affect it within the PR / commit. If
   # everything is checked in, run tests, build the SDK, and upload it to npm.js.
@@ -32,10 +35,12 @@ concurrency:
         with:
           ref: ${{ inputs.GIT_SHA }}
 
-      - uses: ./.github/actions/gar-auth
+      - name: Login to ECR
+        uses: docker/login-action@v2
         with:
-          GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          GCP_SERVICE_ACCOUNT_EMAIL: ${{ secrets.GCP_SERVICE_ACCOUNT_EMAIL }}
+          registry: ${{ secrets.ENV_ECR_AWS_ACCOUNT_NUM }}.dkr.ecr.us-west-2.amazonaws.com
+          username: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          password: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
       - uses: actions/setup-node@v3
         with:
@@ -44,8 +49,8 @@ concurrency:
 
       # Build the API specs.
       - run: mkdir -p /tmp/api_specs
-      - run: docker run --rm ${{ secrets.GCP_DOCKER_ARTIFACT_REPO }}/tools:${{ inputs.GIT_SHA }} aptos-openapi-spec-generator -- -f yaml -o /tmp/api_specs/spec.yaml
-      - run: docker run --rm ${{ secrets.GCP_DOCKER_ARTIFACT_REPO }}/tools:${{ inputs.GIT_SHA }} aptos-openapi-spec-generator -- -f json -o /tmp/api_specs/spec.json
+      - run: docker run --rm ${{ secrets.ENV_ECR_AWS_ACCOUNT_NUM }}.dkr.ecr.us-west-2.amazonaws.com/aptos/tools:${{ inputs.GIT_SHA }} aptos-openapi-spec-generator -- -f yaml -o /tmp/api_specs/spec.yaml
+      - run: docker run --rm ${{ secrets.ENV_ECR_AWS_ACCOUNT_NUM }}.dkr.ecr.us-west-2.amazonaws.com/aptos/tools:${{ inputs.GIT_SHA }} aptos-openapi-spec-generator -- -f json -o /tmp/api_specs/spec.json
 
       # Confirm that the specs we built here are the same as those checked in.
       - run: echo "If this lint fails, run the following commands locally to fix it:"
