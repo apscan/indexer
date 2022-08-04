@@ -74,6 +74,8 @@ mod node;
 mod updater;
 mod utils;
 
+use updater::UpdateOp;
+
 #[cfg(test)]
 mod sparse_merkle_test;
 #[cfg(any(test, feature = "bench", feature = "fuzzing"))]
@@ -89,7 +91,8 @@ use aptos_crypto::{
     HashValue,
 };
 use aptos_infallible::Mutex;
-use aptos_types::{nibble::nibble_path::NibblePath, proof::SparseMerkleProof};
+use aptos_types::{nibble::nibble_path::NibblePath, proof::SparseMerkleProofExt};
+use std::collections::btree_map::Entry;
 use std::{
     borrow::Borrow,
     collections::{BTreeMap, HashMap},
@@ -366,7 +369,7 @@ where
 {
     pub fn serial_update(
         &self,
-        update_batch: Vec<Vec<(HashValue, &V)>>,
+        update_batch: Vec<Vec<(HashValue, Option<&V>)>>,
         proof_reader: &impl ProofRead,
     ) -> Result<(Vec<(HashValue, HashMap<NibblePath, HashValue>)>, Self), UpdateError> {
         self.clone()
@@ -377,7 +380,7 @@ where
 
     pub fn batch_update(
         &self,
-        updates: Vec<(HashValue, &V)>,
+        updates: Vec<(HashValue, Option<&V>)>,
         proof_reader: &impl ProofRead,
     ) -> Result<Self, UpdateError> {
         self.clone()
@@ -461,7 +464,7 @@ where
     /// value instead of an owned instance to be consistent with the `batches_update' interface.
     pub fn serial_update(
         &self,
-        update_batch: Vec<Vec<(HashValue, &V)>>,
+        update_batch: Vec<Vec<(HashValue, Option<&V>)>>,
         proof_reader: &impl ProofRead,
     ) -> Result<(Vec<(HashValue, HashMap<NibblePath, HashValue>)>, Self), UpdateError> {
         let mut cur = self.clone();
@@ -565,16 +568,38 @@ where
     /// new, returned tree.
     pub fn batch_update(
         &self,
-        updates: Vec<(HashValue, &V)>,
+        updates: Vec<(HashValue, Option<&V>)>,
         proof_reader: &impl ProofRead,
     ) -> Result<Self, UpdateError> {
         // Flatten, dedup and sort the updates with a btree map since the updates between different
         // versions may overlap on the same address in which case the latter always overwrites.
-        let kvs = updates
-            .into_iter()
-            .collect::<BTreeMap<_, _>>()
-            .into_iter()
-            .collect::<Vec<_>>();
+        let mut kv_btree = BTreeMap::new();
+        for (k, v) in updates {
+            match kv_btree.entry(k) {
+                Entry::Vacant(empty) => {
+                    match v {
+                        Some(value) => empty.insert(UpdateOp::Write(value)),
+                        None => empty.insert(UpdateOp::Delete),
+                    };
+                }
+                Entry::Occupied(mut existing_entry) => {
+                    let existing_value = existing_entry.get_mut();
+                    match v {
+                        Some(value) => *existing_value = UpdateOp::Write(value),
+                        None => {
+                            match existing_value {
+                                UpdateOp::Write(_) => *existing_value = UpdateOp::MaybeDelete,
+                                UpdateOp::MaybeDelete | UpdateOp::Delete => {
+                                    println!("error when processing");
+                                    return Err(UpdateError::DeleteAbsentKey { key: k });
+                                }
+                            };
+                        }
+                    }
+                }
+            };
+        }
+        let kvs = kv_btree.into_iter().collect::<Vec<_>>();
 
         let current_root = self.smt.root_weak();
         if kvs.is_empty() {
@@ -633,7 +658,7 @@ where
 /// A type that implements `ProofRead` can provide proof for keys in persistent storage.
 pub trait ProofRead: Sync {
     /// Gets verified proof for this key in persistent storage.
-    fn get_proof(&self, key: HashValue) -> Option<&SparseMerkleProof>;
+    fn get_proof(&self, key: HashValue) -> Option<&SparseMerkleProofExt>;
 }
 
 /// All errors `update` can possibly return.
@@ -656,4 +681,7 @@ pub enum UpdateError {
         num_siblings: usize,
         depth: usize,
     },
+    /// The update intends to update a key that neither exist in the tree nor persisted storage.
+    #[error("trying to delete an absent key {}", key)]
+    DeleteAbsentKey { key: HashValue },
 }

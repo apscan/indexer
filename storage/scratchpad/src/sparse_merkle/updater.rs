@@ -13,7 +13,8 @@ use aptos_crypto::{
     hash::{CryptoHash, SPARSE_MERKLE_PLACEHOLDER_HASH},
     HashValue,
 };
-use aptos_types::proof::{SparseMerkleLeafNode, SparseMerkleProof};
+use aptos_types::proof::definition::NodeInProof;
+use aptos_types::proof::{SparseMerkleLeafNode, SparseMerkleProofExt};
 use std::cmp::Ordering;
 
 type Result<T> = std::result::Result<T, UpdateError>;
@@ -35,6 +36,13 @@ enum InMemSubTreeInfo<V> {
         subtree: InMemSubTree<V>,
     },
     Empty,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) enum UpdateOp<'a, V> {
+    Write(&'a V),
+    MaybeDelete,
+    Delete,
 }
 
 impl<V: Clone + CryptoHash> InMemSubTreeInfo<V> {
@@ -87,9 +95,9 @@ impl<V: Clone + CryptoHash> InMemSubTreeInfo<V> {
         // If there's a only leaf in the subtree,
         // rollup the leaf, otherwise create an internal node.
         match (&left, &right) {
-            (Self::Empty, Self::Leaf { .. }) => right,
+            (Self::Empty, Self::Empty) => Self::Empty,
             (Self::Leaf { .. }, Self::Empty) => left,
-            (Self::Empty, Self::Empty) => unreachable!(),
+            (Self::Empty, Self::Leaf { .. }) => right,
             _ => InMemSubTreeInfo::create_internal(left, right, generation),
         }
     }
@@ -97,7 +105,7 @@ impl<V: Clone + CryptoHash> InMemSubTreeInfo<V> {
 
 #[derive(Clone)]
 enum PersistedSubTreeInfo<'a> {
-    ProofPathInternal { proof: &'a SparseMerkleProof },
+    ProofPathInternal { proof: &'a SparseMerkleProofExt },
     ProofSibling { hash: HashValue },
     Leaf { leaf: SparseMerkleLeafNode },
 }
@@ -117,15 +125,20 @@ impl<'a, V: Clone + CryptoHash> SubTreeInfo<'a, V> {
         Self::Persisted(PersistedSubTreeInfo::Leaf { leaf })
     }
 
-    fn new_proof_sibling(hash: HashValue) -> Self {
-        if hash == *SPARSE_MERKLE_PLACEHOLDER_HASH {
-            Self::InMem(InMemSubTreeInfo::Empty)
-        } else {
-            Self::Persisted(PersistedSubTreeInfo::ProofSibling { hash })
+    fn new_proof_sibling(node_in_proof: &NodeInProof) -> Self {
+        match node_in_proof {
+            NodeInProof::Leaf(leaf) => Self::new_proof_leaf(leaf.clone()),
+            NodeInProof::Other(hash) => {
+                if *hash == *SPARSE_MERKLE_PLACEHOLDER_HASH {
+                    Self::InMem(InMemSubTreeInfo::Empty)
+                } else {
+                    Self::Persisted(PersistedSubTreeInfo::ProofSibling { hash: *hash })
+                }
+            }
         }
     }
 
-    fn new_on_proof_path(proof: &'a SparseMerkleProof, depth: usize) -> Self {
+    fn new_on_proof_path(proof: &'a SparseMerkleProofExt, depth: usize) -> Self {
         match proof.siblings().len().cmp(&depth) {
             Ordering::Greater => Self::Persisted(PersistedSubTreeInfo::ProofPathInternal { proof }),
             Ordering::Equal => match proof.leaf() {
@@ -240,7 +253,7 @@ impl<'a, V: Clone + CryptoHash> SubTreeInfo<'a, V> {
                     let siblings = proof.siblings();
                     assert!(siblings.len() > depth);
                     let sibling_child =
-                        SubTreeInfo::new_proof_sibling(siblings[siblings.len() - depth - 1]);
+                        SubTreeInfo::new_proof_sibling(&siblings[siblings.len() - depth - 1]);
                     let on_path_child = SubTreeInfo::new_on_proof_path(proof, depth + 1);
                     swap_if(on_path_child, sibling_child, a_descendent_key.bit(depth))
                 }
@@ -270,14 +283,14 @@ impl<'a, V: Clone + CryptoHash> SubTreeInfo<'a, V> {
 pub struct SubTreeUpdater<'a, V> {
     depth: usize,
     info: SubTreeInfo<'a, V>,
-    updates: &'a [(HashValue, &'a V)],
+    updates: &'a [(HashValue, UpdateOp<'a, V>)],
     generation: u64,
 }
 
 impl<'a, V: Send + Sync + Clone + CryptoHash> SubTreeUpdater<'a, V> {
     pub(crate) fn update(
         root: InMemSubTree<V>,
-        updates: &'a [(HashValue, &'a V)],
+        updates: &'a [(HashValue, UpdateOp<'a, V>)],
         proof_reader: &'a impl ProofRead,
         generation: u64,
     ) -> Result<InMemSubTree<V>> {
@@ -298,7 +311,7 @@ impl<'a, V: Send + Sync + Clone + CryptoHash> SubTreeUpdater<'a, V> {
 
         let generation = self.generation;
         let depth = self.depth;
-        match self.maybe_end_recursion() {
+        match self.maybe_end_recursion()? {
             Either::A(ended) => Ok(ended),
             Either::B(myself) => {
                 let (left, right) = myself.into_children(proof_reader)?;
@@ -316,30 +329,97 @@ impl<'a, V: Send + Sync + Clone + CryptoHash> SubTreeUpdater<'a, V> {
         }
     }
 
-    fn maybe_end_recursion(self) -> Either<InMemSubTreeInfo<V>, Self> {
-        match self.updates.len() {
+    fn maybe_end_recursion(self) -> Result<Either<InMemSubTreeInfo<V>, Self>> {
+        Ok(match self.updates.len() {
             0 => Either::A(self.info.materialize(self.generation)),
-            1 => match &self.info {
-                SubTreeInfo::InMem(in_mem_info) => match in_mem_info {
-                    InMemSubTreeInfo::Empty => Either::A(
-                        InMemSubTreeInfo::create_leaf_with_update(self.updates[0], self.generation),
-                    ),
-                    InMemSubTreeInfo::Leaf { key, .. } => Either::or(
-                        *key == self.updates[0].0,
-                        InMemSubTreeInfo::create_leaf_with_update(self.updates[0], self.generation),
-                        self,
-                    ),
+            1 => {
+                let (key_to_update, update_op) = &self.updates[0];
+                match &self.info {
+                    SubTreeInfo::InMem(in_mem_info) => match in_mem_info {
+                        InMemSubTreeInfo::Empty => {
+                            match update_op {
+                                UpdateOp::Write(value) => {
+                                    Either::A(InMemSubTreeInfo::create_leaf_with_update(
+                                        (*key_to_update, value),
+                                        self.generation,
+                                    ))
+                                }
+                                UpdateOp::Delete => {
+                                    return Err(UpdateError::DeleteAbsentKey {
+                                        key: *key_to_update,
+                                    })
+                                }
+                                // Before this batch, the key does not exist.
+                                UpdateOp::MaybeDelete => {
+                                    Either::A(self.info.materialize(self.generation))
+                                }
+                            }
+                        }
+                        InMemSubTreeInfo::Leaf { key, .. } => {
+                            match update_op {
+                                UpdateOp::Write(value) => Either::or(
+                                    key == key_to_update,
+                                    InMemSubTreeInfo::create_leaf_with_update(
+                                        (*key_to_update, value),
+                                        self.generation,
+                                    ),
+                                    self,
+                                ),
+                                UpdateOp::Delete => {
+                                    if key == key_to_update {
+                                        Either::A(InMemSubTreeInfo::Empty)
+                                    } else {
+                                        return Err(UpdateError::DeleteAbsentKey {
+                                            key: *key_to_update,
+                                        });
+                                    }
+                                }
+                                // Before this batch, the key does not exist.
+                                UpdateOp::MaybeDelete => {
+                                    if key == key_to_update {
+                                        Either::A(InMemSubTreeInfo::Empty)
+                                    } else {
+                                        Either::A(self.info.materialize(self.generation))
+                                    }
+                                }
+                            }
+                        }
+                        _ => Either::B(self),
+                    },
+                    SubTreeInfo::Persisted(PersistedSubTreeInfo::Leaf { leaf }) => {
+                        match update_op {
+                            UpdateOp::Write(value) => Either::or(
+                                leaf.key() == *key_to_update,
+                                InMemSubTreeInfo::create_leaf_with_update(
+                                    (*key_to_update, value),
+                                    self.generation,
+                                ),
+                                self,
+                            ),
+                            UpdateOp::Delete => {
+                                if leaf.key() == *key_to_update {
+                                    Either::A(InMemSubTreeInfo::Empty)
+                                } else {
+                                    return Err(UpdateError::DeleteAbsentKey {
+                                        key: *key_to_update,
+                                    });
+                                }
+                            }
+                            // Before this batch, the key does not exist.
+                            UpdateOp::MaybeDelete => {
+                                if leaf.key() == *key_to_update {
+                                    Either::A(InMemSubTreeInfo::Empty)
+                                } else {
+                                    Either::A(self.info.materialize(self.generation))
+                                }
+                            }
+                        }
+                    }
                     _ => Either::B(self),
-                },
-                SubTreeInfo::Persisted(PersistedSubTreeInfo::Leaf { leaf }) => Either::or(
-                    leaf.key() == self.updates[0].0,
-                    InMemSubTreeInfo::create_leaf_with_update(self.updates[0], self.generation),
-                    self,
-                ),
-                _ => Either::B(self),
-            },
+                }
+            }
             _ => Either::B(self),
-        }
+        })
     }
 
     fn into_children(self, proof_reader: &'a impl ProofRead) -> Result<(Self, Self)> {
