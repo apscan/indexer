@@ -1,11 +1,14 @@
 // Copyright (c) Aptos
 // SPDX-License-Identifier: Apache-2.0
 
+use anyhow::{format_err, Result};
 use aptos_logger::Level;
 use aptos_rest_client::Client as RestClient;
 use aptos_sdk::{move_types::account_address::AccountAddress, transaction_builder::aptos_stdlib};
-use forge::{ForgeConfig, Options, Result, *};
-use std::{env, num::NonZeroUsize, process, time::Duration};
+use forge::{ForgeConfig, Options, *};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use std::{env, num::NonZeroUsize, process, thread, time::Duration};
 use structopt::StructOpt;
 use testcases::{
     compatibility_test::SimpleValidatorUpgrade, fixed_tps_test::FixedTpsTest,
@@ -29,6 +32,8 @@ struct Args {
     burst: bool,
     #[structopt(flatten)]
     options: Options,
+    #[structopt(long)]
+    num_validators: Option<usize>,
     #[structopt(
         long,
         help = "Specify a test suite to run",
@@ -176,37 +181,55 @@ fn main() -> Result<()> {
     let runtime = Runtime::new()?;
     match args.cli_cmd {
         // cmd input for test
-        CliCommand::Test(test_cmd) => match test_cmd {
-            TestCommand::LocalSwarm(..) => run_forge(
-                local_test_suite(),
-                LocalFactory::from_workspace()?,
-                &args.options,
-                args.changelog,
-                global_emit_job_request,
-            ),
-            TestCommand::K8sSwarm(k8s) => {
-                let mut test_suite = get_test_suite(args.suite.as_ref());
-                if let Some(move_modules_dir) = k8s.move_modules_dir {
-                    test_suite = test_suite.with_genesis_modules_path(move_modules_dir);
+        CliCommand::Test(ref test_cmd) => {
+            // Identify the test suite to run
+            let mut test_suite = get_test_suite(args.suite.as_ref())?;
+            if let Some(num_validators) = args.num_validators {
+                match NonZeroUsize::new(num_validators) {
+                    Some(num_validators) => {
+                        test_suite = test_suite.with_initial_validator_count(num_validators)
+                    }
+                    None => {
+                        return Err(format_err!(
+                            "--num-validators must be positive! Given: {:?}!",
+                            num_validators
+                        ))
+                    }
                 }
-                run_forge(
-                    test_suite,
-                    K8sFactory::new(
-                        k8s.namespace.clone(),
-                        k8s.image_tag,
-                        k8s.base_image_tag,
-                        k8s.port_forward,
-                        k8s.keep,
-                        k8s.enable_haproxy,
-                    )
-                    .unwrap(),
-                    &args.options,
-                    args.changelog,
-                    global_emit_job_request,
-                )?;
-                Ok(())
             }
-        },
+
+            // Run the test suite
+            match test_cmd {
+                TestCommand::LocalSwarm(..) => run_forge(
+                    test_suite,
+                    LocalFactory::from_workspace()?,
+                    &args.options,
+                    args.changelog.clone(),
+                    global_emit_job_request,
+                ),
+                TestCommand::K8sSwarm(k8s) => {
+                    if let Some(move_modules_dir) = &k8s.move_modules_dir {
+                        test_suite = test_suite.with_genesis_modules_path(move_modules_dir.clone());
+                    }
+                    run_forge(
+                        test_suite,
+                        K8sFactory::new(
+                            k8s.namespace.clone(),
+                            k8s.image_tag.clone(),
+                            k8s.base_image_tag.clone(),
+                            k8s.port_forward,
+                            k8s.keep,
+                            k8s.enable_haproxy,
+                        )
+                        .unwrap(),
+                        &args.options,
+                        args.changelog.clone(),
+                        global_emit_job_request,
+                    )?;
+                    Ok(())
+                }
+            }
+        }
         // cmd input for cluster operations
         CliCommand::Operator(op_cmd) => match op_cmd {
             OperatorCommand::SetValidator(set_validator) => set_validator_image_tag(
@@ -321,15 +344,25 @@ fn get_changelog(prev_commit: Option<&String>, upstream_commit: &str) -> String 
     }
 }
 
-fn get_test_suite(suite_name: &str) -> ForgeConfig<'static> {
+fn get_test_suite(suite_name: &str) -> Result<ForgeConfig<'static>> {
     match suite_name {
-        "land_blocking_compat" => land_blocking_test_compat_suite(),
-        "land_blocking" => land_blocking_test_suite(),
-        "pre_release" => pre_release_suite(),
-        // TODO(rustielin): verify each test suite
-        "k8s_suite" => k8s_test_suite(),
+        "land_blocking_compat" => Ok(land_blocking_test_compat_suite()),
+        "land_blocking" => Ok(land_blocking_test_suite()),
+        "local_test_suite" => Ok(local_test_suite()),
+        "pre_release" => Ok(pre_release_suite()),
+        "run_forever" => Ok(run_forever()),
+        "k8s_suite" => Ok(k8s_test_suite()),
         single_test => single_test_suite(single_test),
     }
+}
+
+/// Provides a forge config that runs the swarm forever (unless killed)
+fn run_forever() -> ForgeConfig<'static> {
+    ForgeConfig::default()
+        .with_aptos_tests(&[&FundAccount, &TransferCoins])
+        .with_admin_tests(&[&GetMetadata])
+        .with_genesis_modules_bytes(cached_framework_packages::module_blobs().to_vec())
+        .with_aptos_tests(&[&RunForever])
 }
 
 fn local_test_suite() -> ForgeConfig<'static> {
@@ -348,16 +381,17 @@ fn k8s_test_suite() -> ForgeConfig<'static> {
         .with_network_tests(&[&EmitTransaction, &SimpleValidatorUpgrade])
 }
 
-fn single_test_suite(test_name: &str) -> ForgeConfig<'static> {
+fn single_test_suite(test_name: &str) -> Result<ForgeConfig<'static>> {
     let config =
         ForgeConfig::default().with_initial_validator_count(NonZeroUsize::new(30).unwrap());
-    match test_name {
+    let single_test_suite = match test_name {
         "bench" => config.with_network_tests(&[&PerformanceBenchmark]),
         "state_sync" => config.with_network_tests(&[&StateSyncPerformance]),
         "compat" => config.with_network_tests(&[&SimpleValidatorUpgrade]),
         "config" => config.with_network_tests(&[&ReconfigurationTest]),
-        _ => config.with_network_tests(&[&PerformanceBenchmark]),
-    }
+        _ => return Err(format_err!("Invalid --suite given: {:?}", test_name)),
+    };
+    Ok(single_test_suite)
 }
 
 fn land_blocking_test_suite() -> ForgeConfig<'static> {
@@ -388,6 +422,30 @@ fn pre_release_suite() -> ForgeConfig<'static> {
             &ReconfigurationTest,
             &StateSyncPerformance,
         ])
+}
+
+/// A simple test that runs the swarm forever. This is useful for
+/// local testing (e.g., deploying a local swarm and interacting
+/// with it).
+#[derive(Debug)]
+struct RunForever;
+
+impl Test for RunForever {
+    fn name(&self) -> &'static str {
+        "run_forever"
+    }
+}
+
+#[async_trait::async_trait]
+impl AptosTest for RunForever {
+    async fn run<'t>(&self, _ctx: &mut AptosContext<'t>) -> Result<()> {
+        println!("The network has been deployed. Hit Ctrl+C to kill this, otherwise it will run forever.");
+        let keep_running = Arc::new(AtomicBool::new(true));
+        while keep_running.load(Ordering::Acquire) {
+            thread::park();
+        }
+        Ok(())
+    }
 }
 
 //TODO Make public test later
