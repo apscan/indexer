@@ -41,8 +41,9 @@ pub struct Validatable<V: Validate> {
 }
 
 impl<V: Validate> Validatable<V> {
-    /// Create a new `Validatable` from a valid type
-    pub fn new_valid(valid: V) -> Self {
+    /// Create a new `Validatable` from a validated type. This will assume the input has been validated
+    /// by the caller and as a result `Validatable::<V>::validate().is_ok()` will always return true.
+    pub fn from_validated(valid: V) -> Self {
         let unvalidated = valid.to_unvalidated();
 
         let maybe_valid = OnceCell::new();
@@ -55,7 +56,7 @@ impl<V: Validate> Validatable<V> {
     }
 
     /// Create a new `Validatable` from an unvalidated type
-    pub fn new_unvalidated(unvalidated: V::Unvalidated) -> Self {
+    pub fn from_unvalidated(unvalidated: V::Unvalidated) -> Self {
         Self {
             unvalidated,
             maybe_valid: OnceCell::new(),
@@ -106,7 +107,7 @@ where
         D: serde::Deserializer<'de>,
     {
         let unvalidated = <V::Unvalidated>::deserialize(deserializer)?;
-        Ok(Self::new_unvalidated(unvalidated))
+        Ok(Self::from_unvalidated(unvalidated))
     }
 }
 

@@ -38,8 +38,33 @@ pub fn all_natives(framework_addr: AccountAddress) -> NativeFunctionTable {
         ),
         (
             "signature",
+            "bls12381_aggregate_signatures",
+            signature::native_bls12381_aggregate_signatures,
+        ),
+        (
+            "signature",
+            "bls12381_signature_subgroup_check",
+            signature::native_bls12381_signature_subgroup_check,
+        ),
+        (
+            "signature",
             "bls12381_validate_pubkey",
             signature::native_bls12381_validate_pubkey,
+        ),
+        (
+            "signature",
+            "bls12381_verify_aggregate_signature",
+            signature::native_bls12381_verify_aggregate_signature,
+        ),
+        (
+            "signature",
+            "bls12381_verify_multisignature",
+            signature::native_bls12381_verify_multisignature,
+        ),
+        (
+            "signature",
+            "bls12381_verify_normal_signature",
+            signature::native_bls12381_verify_normal_signature,
         ),
         (
             "signature",
@@ -48,8 +73,8 @@ pub fn all_natives(framework_addr: AccountAddress) -> NativeFunctionTable {
         ),
         (
             "signature",
-            "bls12381_verify_signature",
-            signature::native_bls12381_verify_signature,
+            "bls12381_verify_signature_share",
+            signature::native_bls12381_verify_signature_share,
         ),
         (
             "signature",
