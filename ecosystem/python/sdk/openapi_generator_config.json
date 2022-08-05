@@ -1,0 +1,6 @@
+{
+    "projectName": "Aptos Python SDK",
+    "packageName": "aptos_sdk",
+    "packageVersion": "0.0.1",
+    "packageUrl": "https://github.com/aptos-labs/aptos-core/tree/main/ecosystem/python/sdk"
+  }

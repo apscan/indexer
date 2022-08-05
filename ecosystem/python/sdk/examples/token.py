@@ -1,8 +1,8 @@
 # Copyright (c) Aptos
 # SPDX-License-Identifier: Apache-2.0
 
-from aptos_sdk.account import Account
-from aptos_sdk.client import FaucetClient, RestClient, TESTNET_URL, FAUCET_URL
+from aptos_sdk.helpers.account import Account
+from aptos_sdk.helpers.client import FaucetClient, RestClient, TESTNET_URL, FAUCET_URL
 
 
 if __name__ == "__main__":
