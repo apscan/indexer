@@ -4,7 +4,7 @@
 use crate::{
     executor::ParallelTransactionExecutor,
     proptest_types::types::{
-        ExpectedOutput, Task, Transaction, TransactionGen, TransactionGenParams,
+        ExpectedOutput, KeyType, Task, Transaction, TransactionGen, TransactionGenParams,
     },
 };
 use num_cpus;
@@ -46,8 +46,10 @@ where
     let mut ret = true;
     for _ in 0..num_repeat {
         let output =
-            ParallelTransactionExecutor::<Transaction<K, V>, Task<K, V>>::new(num_cpus::get())
-                .execute_transactions_parallel((), transactions.clone());
+            ParallelTransactionExecutor::<Transaction<KeyType<K>, V>, Task<KeyType<K>, V>>::new(
+                num_cpus::get(),
+            )
+            .execute_transactions_parallel((), transactions.clone());
 
         let baseline = ExpectedOutput::generate_baseline(&transactions);
 

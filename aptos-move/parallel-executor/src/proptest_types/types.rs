@@ -4,8 +4,12 @@
 use crate::{
     errors::{Error, Result},
     executor::MVHashMapView,
-    task::{ExecutionStatus, ExecutorTask, Transaction as TransactionType, TransactionOutput},
+    task::{
+        ExecutionStatus, ExecutorTask, ModulePath, Transaction as TransactionType,
+        TransactionOutput,
+    },
 };
+use aptos_types::access_path::AccessPath;
 use proptest::{arbitrary::Arbitrary, collection::vec, prelude::*, proptest, sample::Index};
 use proptest_derive::Arbitrary;
 use std::{
@@ -22,6 +26,17 @@ use std::{
 ///////////////////////////////////////////////////////////////////////////
 // Generation of transactions
 ///////////////////////////////////////////////////////////////////////////
+
+#[derive(Clone, Copy, Hash, Debug, PartialEq, PartialOrd, Eq)]
+pub struct KeyType<K: Hash + Clone + Debug + PartialOrd + Eq>(pub K);
+
+// [u8; 32] k
+
+impl<K: Hash + Clone + Debug + Eq + PartialOrd> ModulePath for KeyType<K> {
+    fn get_module_path(&self) -> Option<AccessPath> {
+        return None;
+    }
+}
 
 #[derive(Clone, Copy)]
 pub struct TransactionGenParams {
@@ -96,17 +111,20 @@ impl Default for TransactionGenParams {
 }
 
 impl<V: Arbitrary + Debug + Clone> TransactionGen<V> {
-    pub fn materialize<K: Clone + Eq + Ord>(self, universe: &[K]) -> Transaction<K, V> {
+    pub fn materialize<K: Clone + Hash + Debug + Eq + Ord>(
+        self,
+        universe: &[K],
+    ) -> Transaction<KeyType<K>, V> {
         let mut keys_modified = BTreeSet::new();
         let mut writes = vec![];
 
         for modified in self.keys_modified.into_iter() {
-            let mut incarnation_writes: Vec<(K, V)> = vec![];
+            let mut incarnation_writes: Vec<(KeyType<K>, V)> = vec![];
             for (idx, value) in modified.into_iter() {
                 let key = universe[idx.index(universe.len())].clone();
                 if !keys_modified.contains(&key) {
                     keys_modified.insert(key.clone());
-                    incarnation_writes.push((key, value.clone()));
+                    incarnation_writes.push((KeyType(key), value.clone()));
                 }
             }
             writes.push(incarnation_writes);
@@ -121,7 +139,7 @@ impl<V: Arbitrary + Debug + Clone> TransactionGen<V> {
                 .map(|keys_read| {
                     keys_read
                         .into_iter()
-                        .map(|k| universe[k.index(universe.len())].clone())
+                        .map(|k| KeyType(universe[k.index(universe.len())].clone()))
                         .collect()
                 })
                 .collect(),
@@ -131,7 +149,7 @@ impl<V: Arbitrary + Debug + Clone> TransactionGen<V> {
 
 impl<K, V> TransactionType for Transaction<K, V>
 where
-    K: PartialOrd + Send + Sync + Clone + Hash + Eq + 'static,
+    K: PartialOrd + Send + Sync + Clone + Hash + Eq + ModulePath + 'static,
     V: Send + Sync + Debug + Clone + 'static,
 {
     type Key = K;
@@ -152,7 +170,7 @@ impl<K, V> Task<K, V> {
 
 impl<K, V> ExecutorTask for Task<K, V>
 where
-    K: PartialOrd + Send + Sync + Clone + Hash + Eq + 'static,
+    K: PartialOrd + Send + Sync + Clone + Hash + Eq + ModulePath + 'static,
     V: Send + Sync + Debug + Clone + 'static,
 {
     type T = Transaction<K, V>;
@@ -200,7 +218,7 @@ pub struct Output<K, V>(Vec<(K, V)>, Vec<Option<V>>);
 
 impl<K, V> TransactionOutput for Output<K, V>
 where
-    K: PartialOrd + Send + Sync + Clone + Hash + Eq + 'static,
+    K: PartialOrd + Send + Sync + Clone + Hash + Eq + ModulePath + 'static,
     V: Send + Sync + Debug + Clone + 'static,
 {
     type T = Transaction<K, V>;
