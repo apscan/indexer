@@ -5,5 +5,5 @@ CREATE TABLE latset_write_set_changes (
     address          VARCHAR(255) NOT NULL,
     type             TEXT         NOT NULL
     
-    PRIMARY KEY (address, hash),
+    PRIMARY KEY (address, hash)
 );
