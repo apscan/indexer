@@ -1,6 +1,3 @@
-// Copyright (c) Aptos
-// SPDX-License-Identifier: Apache-2.0
-
 table! {
     block_metadata_transactions (hash) {
         hash -> Varchar,
@@ -168,6 +165,7 @@ table! {
 table! {
     write_set_changes (transaction_hash, hash) {
         transaction_hash -> Varchar,
+        version -> Int8,
         hash -> Varchar,
         #[sql_name = "type"]
         type_ -> Text,

@@ -210,6 +210,7 @@ impl Transaction {
                 EventModel::from_events(tx.info.hash.to_string(), &tx.events),
                 WriteSetChangeModel::from_write_set_changes(
                     tx.info.hash.to_string(),
+                    *tx.info.version.inner() as i64,
                     &tx.info.changes,
                 ),
             ),
@@ -223,6 +224,7 @@ impl Transaction {
                 EventModel::from_events(tx.info.hash.to_string(), &tx.events),
                 WriteSetChangeModel::from_write_set_changes(
                     tx.info.hash.to_string(),
+                    *tx.info.version.inner() as i64,
                     &tx.info.changes,
                 ),
             ),
@@ -238,6 +240,7 @@ impl Transaction {
                 EventModel::from_events(tx.info.hash.to_string(), &tx.events),
                 WriteSetChangeModel::from_write_set_changes(
                     tx.info.hash.to_string(),
+                    *tx.info.version.inner() as i64,
                     &tx.info.changes,
                 ),
             ),

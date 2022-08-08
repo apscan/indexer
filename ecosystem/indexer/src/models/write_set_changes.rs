@@ -15,6 +15,7 @@ use serde_json::json;
 #[primary_key(transaction_hash, hash)]
 pub struct WriteSetChange {
     pub transaction_hash: String,
+    pub version: i64,
     pub hash: String,
     #[diesel(column_name = type)]
     pub type_: String,
@@ -30,6 +31,7 @@ pub struct WriteSetChange {
 impl WriteSetChange {
     pub fn from_write_set_change(
         transaction_hash: String,
+        version: i64,
         write_set_change: &APIWriteSetChange,
     ) -> Self {
         match write_set_change {
@@ -39,6 +41,7 @@ impl WriteSetChange {
                 module,
             }) => WriteSetChange {
                 transaction_hash,
+                version,
                 hash: state_key_hash.clone(),
                 type_: write_set_change.type_str().to_string(),
                 address: address.to_string(),
@@ -53,6 +56,7 @@ impl WriteSetChange {
                 resource,
             }) => WriteSetChange {
                 transaction_hash,
+                version,
                 hash: state_key_hash.clone(),
                 type_: write_set_change.type_str().to_string(),
                 address: address.to_string(),
@@ -68,6 +72,7 @@ impl WriteSetChange {
                 ..
             }) => WriteSetChange {
                 transaction_hash,
+                version,
                 hash: state_key_hash.clone(),
                 type_: write_set_change.type_str().to_string(),
                 address: "".to_owned(),
@@ -85,6 +90,7 @@ impl WriteSetChange {
                 data,
             }) => WriteSetChange {
                 transaction_hash,
+                version,
                 hash: state_key_hash.clone(),
                 type_: write_set_change.type_str().to_string(),
                 address: address.to_string(),
@@ -99,6 +105,7 @@ impl WriteSetChange {
                 data,
             }) => WriteSetChange {
                 transaction_hash,
+                version,
                 hash: state_key_hash.clone(),
                 type_: write_set_change.type_str().to_string(),
                 address: address.to_string(),
@@ -115,6 +122,7 @@ impl WriteSetChange {
                 ..
             }) => WriteSetChange {
                 transaction_hash,
+                version,
                 hash: state_key_hash.clone(),
                 type_: write_set_change.type_str().to_string(),
                 address: "".to_owned(),
@@ -132,6 +140,7 @@ impl WriteSetChange {
 
     pub fn from_write_set_changes(
         transaction_hash: String,
+        version: i64,
         write_set_changes: &[APIWriteSetChange],
     ) -> Option<Vec<Self>> {
         if write_set_changes.is_empty() {
@@ -141,7 +150,7 @@ impl WriteSetChange {
             write_set_changes
                 .iter()
                 .map(|write_set_change| {
-                    Self::from_write_set_change(transaction_hash.clone(), write_set_change)
+                    Self::from_write_set_change(transaction_hash.clone(), version, write_set_change)
                 })
                 .collect::<Vec<WriteSetChangeModel>>(),
         )
