@@ -1,2 +1,2 @@
 -- This file should undo anything in `up.sql`
-drop table if exists write_set_changes; 
+alter table write_set_changes drop column if exists version CASCADE;

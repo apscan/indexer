@@ -23,4 +23,4 @@ CREATE TABLE write_set_changes
 );
 
 CREATE INDEX write_set_changes_tx_hash_addr_type_index ON write_set_changes (transaction_hash, address, type);
-CREATE INDEX write_set_changes_address_version_type_index ON write_set_changes (address, version, type);
+CREATE INDEX write_set_changes_address_hash_version_index ON write_set_changes (address, hash, version);
