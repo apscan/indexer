@@ -325,6 +325,10 @@ mod test {
             unimplemented!();
         }
 
+        async fn fetch_next_batch(&mut self, _batch_size : u8) -> Vec<Transaction> {
+            unimplemented!();
+        }
+
         async fn fetch_version(&self, _version: u64) -> Transaction {
             unimplemented!();
         }

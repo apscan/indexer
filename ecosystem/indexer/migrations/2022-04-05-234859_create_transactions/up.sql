@@ -37,8 +37,8 @@ CREATE TABLE transactions
     payload               jsonb                           NOT NULL,
 
     -- from OnChainTransactionInfo
-    version               BIGINT UNIQUE                   NOT NULL,
-    hash                  VARCHAR(255) UNIQUE PRIMARY KEY NOT NULL,
+    version               BIGINT UNIQUE PRIMARY KEY       NOT NULL,
+    hash                  VARCHAR(255) UNIQUE             NOT NULL,
     state_root_hash       VARCHAR(255)                    NOT NULL,
     event_root_hash       VARCHAR(255)                    NOT NULL,
     gas_used              BIGINT                          NOT NULL,
@@ -107,7 +107,7 @@ CREATE TABLE transactions
 CREATE TABLE user_transactions
 (
     -- join from "transactions"
-    hash                      VARCHAR(255) UNIQUE PRIMARY KEY NOT NULL,
+    version                   BIGINT       UNIQUE PRIMARY KEY NOT NULL,
 
     -- from UserTransactionSignature
     signature                 jsonb                           NOT NULL,
@@ -127,8 +127,8 @@ CREATE TABLE user_transactions
 
     -- Constraints
     CONSTRAINT fk_transactions
-        FOREIGN KEY (hash)
-            REFERENCES transactions (hash),
+        FOREIGN KEY (version)
+            REFERENCES transactions (version),
     UNIQUE (sender, sequence_number)
 );
 
@@ -171,7 +171,7 @@ CREATE INDEX ut_sender_index ON user_transactions (sender);
 CREATE TABLE block_metadata_transactions
 (
     -- join from "transactions"
-    hash                 VARCHAR(255) UNIQUE PRIMARY KEY NOT NULL,
+    version              BIGINT       UNIQUE PRIMARY KEY NOT NULL,
 
     -- from BlockMetadataTransaction
     id                   VARCHAR(255)                    NOT NULL,
@@ -185,6 +185,6 @@ CREATE TABLE block_metadata_transactions
 
     -- Constraints
     CONSTRAINT fk_transactions
-        FOREIGN KEY (hash)
-            REFERENCES transactions (hash)
+        FOREIGN KEY (version)
+            REFERENCES transactions (version)
 );

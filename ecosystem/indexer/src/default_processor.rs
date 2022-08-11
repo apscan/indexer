@@ -10,13 +10,13 @@ use crate::{
     models::{
         events::EventModel,
         transactions::{BlockMetadataTransactionModel, TransactionModel, UserTransactionModel},
-        write_set_changes::WriteSetChangeModel,
+        write_set_changes::WriteSetChangeModel
     },
     schema,
 };
 use aptos_rest_client::Transaction;
 use async_trait::async_trait;
-use diesel::Connection;
+use diesel::{Connection};
 use futures::future::Either;
 use std::{fmt::Debug, sync::Arc};
 
@@ -93,7 +93,7 @@ fn insert_user_transaction(
         conn,
         diesel::insert_into(schema::user_transactions::table)
             .values(user_transaction_model)
-            .on_conflict(schema::user_transactions::dsl::hash)
+            .on_conflict(schema::user_transactions::dsl::version)
             .do_update()
             .set(user_transaction_model),
     )
@@ -115,7 +115,7 @@ fn insert_block_metadata_transaction(
         conn,
         diesel::insert_into(schema::block_metadata_transactions::table)
             .values(block_metadata_transaction_model)
-            .on_conflict(schema::block_metadata_transactions::dsl::hash)
+            .on_conflict(schema::block_metadata_transactions::dsl::version)
             .do_update()
             .set(block_metadata_transaction_model),
     )
@@ -133,7 +133,6 @@ impl TransactionProcessor for DefaultTransactionProcessor {
         transaction: Arc<Transaction>,
     ) -> Result<ProcessingResult, TransactionProcessingError> {
         let version = transaction.version().unwrap_or(0);
-
         let (transaction_model, maybe_details_model, maybe_events, maybe_write_set_changes) =
             TransactionModel::from_transaction(&transaction);
 

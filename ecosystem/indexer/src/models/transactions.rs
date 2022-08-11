@@ -23,7 +23,7 @@ use serde::Serialize;
 static SECONDS_IN_10_YEARS: i64 = 60 * 60 * 24 * 365 * 10;
 
 #[derive(AsChangeset, Debug, Identifiable, Insertable, Queryable, Serialize)]
-#[primary_key(hash)]
+#[primary_key(version)]
 #[diesel(table_name = "transactions")]
 pub struct Transaction {
     #[diesel(column_name = type)]
@@ -159,23 +159,23 @@ impl Transaction {
         let mut block_metadata_transaction: Option<BlockMetadataTransaction> = None;
 
         let events = crate::schema::events::table
-            .filter(crate::schema::events::transaction_hash.eq(&self.hash))
+            .filter(crate::schema::events::transaction_version.eq(&self.version))
             .load::<EventModel>(connection)?;
 
         let write_set_changes = crate::schema::write_set_changes::table
-            .filter(crate::schema::write_set_changes::transaction_hash.eq(&self.hash))
+            .filter(crate::schema::write_set_changes::transaction_version.eq(&self.version))
             .load::<WriteSetChangeModel>(connection)?;
 
         match self.type_.as_str() {
             "user_transaction" => {
                 user_transaction = user_transactions::table
-                    .filter(user_transactions::hash.eq(&self.hash))
+                    .filter(user_transactions::version.eq(&self.version))
                     .first::<UserTransaction>(connection)
                     .optional()?;
             }
             "block_metadata_transaction" => {
                 block_metadata_transaction = block_metadata_transactions::table
-                    .filter(block_metadata_transactions::hash.eq(&self.hash))
+                    .filter(block_metadata_transactions::version.eq(&self.version))
                     .first::<BlockMetadataTransaction>(connection)
                     .optional()?;
             }
@@ -207,9 +207,8 @@ impl Transaction {
                     transaction.type_str().to_string(),
                 ),
                 Some(Either::Left(UserTransaction::from_transaction(tx))),
-                EventModel::from_events(tx.info.hash.to_string(), &tx.events),
+                EventModel::from_events(*tx.info.version.inner() as i64, &tx.events),
                 WriteSetChangeModel::from_write_set_changes(
-                    tx.info.hash.to_string(),
                     *tx.info.version.inner() as i64,
                     &tx.info.changes,
                 ),
@@ -221,9 +220,8 @@ impl Transaction {
                     transaction.type_str().to_string(),
                 ),
                 None,
-                EventModel::from_events(tx.info.hash.to_string(), &tx.events),
+                EventModel::from_events(*tx.info.version.inner() as i64, &tx.events),
                 WriteSetChangeModel::from_write_set_changes(
-                    tx.info.hash.to_string(),
                     *tx.info.version.inner() as i64,
                     &tx.info.changes,
                 ),
@@ -237,9 +235,8 @@ impl Transaction {
                 Some(Either::Right(BlockMetadataTransaction::from_transaction(
                     tx,
                 ))),
-                EventModel::from_events(tx.info.hash.to_string(), &tx.events),
+                EventModel::from_events(*tx.info.version.inner() as i64, &tx.events),
                 WriteSetChangeModel::from_write_set_changes(
-                    tx.info.hash.to_string(),
                     *tx.info.version.inner() as i64,
                     &tx.info.changes,
                 ),
@@ -258,6 +255,50 @@ impl Transaction {
                 unreachable!()
             }
         }
+    }
+
+
+    pub fn from_transactions(new_transactions : &Vec<APITransaction>) -> (
+        Vec<Transaction>,
+        Vec<UserTransaction>,
+        Vec<BlockMetadataTransaction>,
+        Vec<EventModel>,
+        Vec<WriteSetChangeModel>
+    ) {
+        let mut transactions = Vec::new();
+        let mut user_transactions = Vec::new();
+        let mut block_metadata_transactions = Vec::new();
+        let mut events = Vec::new();
+        let mut changes = Vec::new();
+
+        for txn in new_transactions {
+            let (transaction_model, maybe_details_model, maybe_events, maybe_write_set_changes) = Self::from_transaction(&txn);
+            transactions.push(transaction_model);
+            match maybe_details_model {
+                None => {}
+                Some(tx_details_model) => match tx_details_model {
+                    Either::Left(user_transaction_model) => {
+                        user_transactions.push(user_transaction_model);
+                    }
+                    Either::Right(block_metadata_transaction_model) => {
+                        block_metadata_transactions.push(block_metadata_transaction_model);
+                    }
+                }
+            }
+            match maybe_events {
+                None => {}
+                Some(maybe_events) => {
+                    events.extend(maybe_events)
+                }
+            }
+            match maybe_write_set_changes {
+                None => {}
+                Some(maybe_write_set_changes) => {
+                    changes.extend(maybe_write_set_changes)
+                }
+            }
+        }
+        (transactions, user_transactions, block_metadata_transactions, events, changes)
     }
 
     fn from_transaction_info(
@@ -282,11 +323,11 @@ impl Transaction {
 }
 
 #[derive(AsChangeset, Associations, Debug, Identifiable, Insertable, Queryable, Serialize)]
-#[belongs_to(Transaction, foreign_key = "hash")]
-#[primary_key(hash)]
+#[belongs_to(Transaction, foreign_key = "version")]
+#[primary_key(version)]
 #[diesel(table_name = "user_transactions")]
 pub struct UserTransaction {
-    pub hash: String,
+    pub version: i64,
     pub signature: serde_json::Value,
     pub sender: String,
     pub sequence_number: i64,
@@ -306,7 +347,7 @@ pub struct UserTransaction {
 impl UserTransaction {
     pub fn from_transaction(tx: &APIUserTransaction) -> Self {
         Self {
-            hash: tx.info.hash.to_string(),
+            version: *tx.info.version.inner() as i64,
             signature: serde_json::to_value(&tx.request.signature).unwrap(),
             sender: tx.request.sender.inner().to_hex_literal(),
             sequence_number: *tx.request.sequence_number.inner() as i64,
@@ -323,11 +364,11 @@ impl UserTransaction {
 }
 
 #[derive(AsChangeset, Associations, Debug, Identifiable, Insertable, Queryable, Serialize)]
-#[belongs_to(Transaction, foreign_key = "hash")]
-#[primary_key("hash")]
+#[belongs_to(Transaction, foreign_key = "version")]
+#[primary_key("version")]
 #[diesel(table_name = "block_metadata_transactions")]
 pub struct BlockMetadataTransaction {
-    pub hash: String,
+    pub version: i64,
     pub id: String,
     pub round: i64,
     pub previous_block_votes: serde_json::Value,
@@ -344,7 +385,7 @@ pub struct BlockMetadataTransaction {
 impl BlockMetadataTransaction {
     pub fn from_transaction(tx: &APIBlockMetadataTransaction) -> Self {
         Self {
-            hash: tx.info.hash.to_string(),
+            version: *tx.info.version.inner() as i64,
             id: tx.id.to_string(),
             round: *tx.round.inner() as i64,
             // TODO: Deprecated, use previous_block_votes_bitmap instead. Column kept to not break indexer users (e.g., explorer), writing an empty vector.

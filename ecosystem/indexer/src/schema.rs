@@ -1,6 +1,16 @@
 table! {
-    block_metadata_transactions (hash) {
+    account_resources (address, hash) {
+        address -> Varchar,
         hash -> Varchar,
+        version -> Int8,
+        #[sql_name = "type"]
+        type_ -> Text,
+    }
+}
+
+table! {
+    block_metadata_transactions (version) {
+        version -> Int8,
         id -> Varchar,
         round -> Int8,
         previous_block_votes -> Jsonb,
@@ -19,7 +29,7 @@ table! {
         creator -> Varchar,
         name -> Varchar,
         description -> Varchar,
-        max_amount -> Nullable<Int8>,
+        max_amount -> Nullable<Varchar>,
         uri -> Varchar,
         created_at -> Timestamp,
         inserted_at -> Timestamp,
@@ -28,7 +38,7 @@ table! {
 
 table! {
     events (key, sequence_number) {
-        transaction_hash -> Varchar,
+        transaction_version -> Int8,
         key -> Varchar,
         sequence_number -> Int8,
         #[sql_name = "type"]
@@ -103,12 +113,12 @@ table! {
         collection -> Varchar,
         name -> Varchar,
         description -> Varchar,
-        max_amount -> Int8,
+        max_amount -> Varchar,
         supply -> Int8,
         uri -> Varchar,
         royalty_payee_address -> Varchar,
-        royalty_points_denominator -> Int8,
-        royalty_points_numerator -> Int8,
+        royalty_points_denominator -> Varchar,
+        royalty_points_numerator -> Varchar,
         mutability_config -> Varchar,
         property_keys -> Varchar,
         property_values -> Varchar,
@@ -132,7 +142,7 @@ table! {
 }
 
 table! {
-    transactions (hash) {
+    transactions (version) {
         #[sql_name = "type"]
         type_ -> Varchar,
         payload -> Jsonb,
@@ -149,8 +159,8 @@ table! {
 }
 
 table! {
-    user_transactions (hash) {
-        hash -> Varchar,
+    user_transactions (version) {
+        version -> Int8,
         signature -> Jsonb,
         sender -> Varchar,
         sequence_number -> Int8,
@@ -163,12 +173,10 @@ table! {
 }
 
 table! {
-    write_set_changes (transaction_hash, hash) {
-        transaction_hash -> Varchar,
-        version -> Int8,
-        hash -> Varchar,
-        #[sql_name = "type"]
-        type_ -> Text,
+    write_set_changes (transaction_version, state_key_hash) {
+        transaction_version -> Int8,
+        state_key_hash -> Varchar,
+        change_type -> Text,
         address -> Varchar,
         module -> Jsonb,
         resource -> Jsonb,
@@ -178,6 +186,7 @@ table! {
 }
 
 allow_tables_to_appear_in_same_query!(
+    account_resources,
     block_metadata_transactions,
     collections,
     events,

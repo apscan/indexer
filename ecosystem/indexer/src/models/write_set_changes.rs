@@ -1,7 +1,7 @@
 // Copyright (c) Aptos
 // SPDX-License-Identifier: Apache-2.0
 #![allow(clippy::extra_unused_lifetimes)]
-use crate::{models::transactions::Transaction, schema::write_set_changes};
+use crate::{models::transactions::Transaction, schema::{write_set_changes}};
 use aptos_rest_client::aptos_api_types::{
     DeleteModule, DeleteResource, DeleteTableItem, WriteModule, WriteResource,
     WriteSetChange as APIWriteSetChange, WriteTableItem,
@@ -11,14 +11,13 @@ use serde_json::json;
 
 #[derive(AsChangeset, Associations, Debug, Identifiable, Insertable, Queryable, Serialize)]
 #[diesel(table_name = "write_set_changes")]
-#[belongs_to(Transaction, foreign_key = "transaction_hash")]
-#[primary_key(transaction_hash, hash)]
+#[belongs_to(Transaction, foreign_key = "transaction_version")]
+#[primary_key(transaction_version, state_key_hash)]
 pub struct WriteSetChange {
-    pub transaction_hash: String,
-    pub version: i64,
-    pub hash: String,
+    pub transaction_version: i64,
+    pub state_key_hash: String,
     #[diesel(column_name = type)]
-    pub type_: String,
+    pub change_type: String,
     pub address: String,
     pub module: serde_json::Value,
     pub resource: serde_json::Value,
@@ -30,8 +29,7 @@ pub struct WriteSetChange {
 
 impl WriteSetChange {
     pub fn from_write_set_change(
-        transaction_hash: String,
-        version: i64,
+        transaction_version: i64,
         write_set_change: &APIWriteSetChange,
     ) -> Self {
         match write_set_change {
@@ -40,10 +38,9 @@ impl WriteSetChange {
                 state_key_hash,
                 module,
             }) => WriteSetChange {
-                transaction_hash,
-                version,
-                hash: state_key_hash.clone(),
-                type_: write_set_change.type_str().to_string(),
+                transaction_version,
+                state_key_hash: state_key_hash.clone(),
+                change_type: write_set_change.type_str().to_string(),
                 address: address.to_string(),
                 module: serde_json::to_value(module).unwrap(),
                 resource: Default::default(),
@@ -55,10 +52,9 @@ impl WriteSetChange {
                 state_key_hash,
                 resource,
             }) => WriteSetChange {
-                transaction_hash,
-                version,
-                hash: state_key_hash.clone(),
-                type_: write_set_change.type_str().to_string(),
+                transaction_version,
+                state_key_hash: state_key_hash.clone(),
+                change_type: write_set_change.type_str().to_string(),
                 address: address.to_string(),
                 module: Default::default(),
                 resource: serde_json::to_value(resource).unwrap(),
@@ -71,10 +67,9 @@ impl WriteSetChange {
                 key,
                 ..
             }) => WriteSetChange {
-                transaction_hash,
-                version,
-                hash: state_key_hash.clone(),
-                type_: write_set_change.type_str().to_string(),
+                transaction_version,
+                state_key_hash: state_key_hash.clone(),
+                change_type: write_set_change.type_str().to_string(),
                 address: "".to_owned(),
                 module: Default::default(),
                 resource: Default::default(),
@@ -89,10 +84,9 @@ impl WriteSetChange {
                 state_key_hash,
                 data,
             }) => WriteSetChange {
-                transaction_hash,
-                version,
-                hash: state_key_hash.clone(),
-                type_: write_set_change.type_str().to_string(),
+                transaction_version,
+                state_key_hash: state_key_hash.clone(),
+                change_type: write_set_change.type_str().to_string(),
                 address: address.to_string(),
                 module: Default::default(),
                 resource: Default::default(),
@@ -104,10 +98,9 @@ impl WriteSetChange {
                 state_key_hash,
                 data,
             }) => WriteSetChange {
-                transaction_hash,
-                version,
-                hash: state_key_hash.clone(),
-                type_: write_set_change.type_str().to_string(),
+                transaction_version,
+                state_key_hash: state_key_hash.clone(),
+                change_type: write_set_change.type_str().to_string(),
                 address: address.to_string(),
                 module: Default::default(),
                 resource: Default::default(),
@@ -121,10 +114,9 @@ impl WriteSetChange {
                 value,
                 ..
             }) => WriteSetChange {
-                transaction_hash,
-                version,
-                hash: state_key_hash.clone(),
-                type_: write_set_change.type_str().to_string(),
+                transaction_version,
+                state_key_hash: state_key_hash.clone(),
+                change_type: write_set_change.type_str().to_string(),
                 address: "".to_owned(),
                 module: Default::default(),
                 resource: Default::default(),
@@ -139,7 +131,6 @@ impl WriteSetChange {
     }
 
     pub fn from_write_set_changes(
-        transaction_hash: String,
         version: i64,
         write_set_changes: &[APIWriteSetChange],
     ) -> Option<Vec<Self>> {
@@ -150,7 +141,7 @@ impl WriteSetChange {
             write_set_changes
                 .iter()
                 .map(|write_set_change| {
-                    Self::from_write_set_change(transaction_hash.clone(), version, write_set_change)
+                    Self::from_write_set_change( version, write_set_change)
                 })
                 .collect::<Vec<WriteSetChangeModel>>(),
         )

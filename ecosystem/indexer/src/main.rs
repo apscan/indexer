@@ -12,7 +12,8 @@ use clap::Parser;
 use std::sync::Arc;
 
 use aptos_indexer::{
-    database::new_db_pool, default_processor::DefaultTransactionProcessor, indexer::tailer::Tailer,
+    database::new_db_pool, default_processor::DefaultTransactionProcessor, indexer::tailer::Tailer, 
+    batch_processor::BatchProcessor,
     token_processor::TokenTransactionProcessor,
 };
 
@@ -82,6 +83,7 @@ async fn main() -> std::io::Result<()> {
 
     tailer.check_or_update_chain_id().await.unwrap();
     let pg_transaction_processor = DefaultTransactionProcessor::new(conn_pool.clone());
+    let pg_batch_processor = BatchProcessor::new(conn_pool.clone());
     tailer.add_processor(Arc::new(pg_transaction_processor));
     if args.index_token_data {
         let token_transaction_processor =

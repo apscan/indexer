@@ -1,8 +1,8 @@
 -- Your SQL goes here
-CREATE TABLE latset_write_set_changes (
-    version          BIGINT       NOT NULL,
-    hash             VARCHAR(255) NOT NULL,
+CREATE TABLE account_resources (
     address          VARCHAR(255) NOT NULL,
+    hash             VARCHAR(255) NOT NULL,
+    version          BIGINT       NOT NULL,
     type             TEXT         NOT NULL,
     
     PRIMARY KEY (address, hash)

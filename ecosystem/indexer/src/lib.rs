@@ -14,6 +14,7 @@ extern crate diesel;
 pub mod counters;
 pub mod database;
 pub mod default_processor;
+pub mod batch_processor;
 pub mod indexer;
 pub mod models;
 pub mod schema;

@@ -7,10 +7,10 @@ use serde::Serialize;
 
 #[derive(Associations, Debug, Identifiable, Insertable, Queryable, Serialize)]
 #[diesel(table_name = "events")]
-#[belongs_to(Transaction, foreign_key = "transaction_hash")]
+#[belongs_to(Transaction, foreign_key = "transaction_version")]
 #[primary_key(key, sequence_number)]
 pub struct Event {
-    pub transaction_hash: String,
+    pub transaction_version: i64,
     pub key: String,
     pub sequence_number: i64,
     #[diesel(column_name = type)]
@@ -22,9 +22,9 @@ pub struct Event {
 }
 
 impl Event {
-    pub fn from_event(transaction_hash: String, event: &APIEvent) -> Self {
+    pub fn from_event(transaction_version: i64, event: &APIEvent) -> Self {
         Event {
-            transaction_hash,
+            transaction_version,
             key: event.key.to_string(),
             sequence_number: event.sequence_number.0 as i64,
             type_: event.typ.to_string(),
@@ -33,14 +33,14 @@ impl Event {
         }
     }
 
-    pub fn from_events(transaction_hash: String, events: &[APIEvent]) -> Option<Vec<Self>> {
+    pub fn from_events(transaction_version: i64, events: &[APIEvent]) -> Option<Vec<Self>> {
         if events.is_empty() {
             return None;
         }
         Some(
             events
                 .iter()
-                .map(|event| Self::from_event(transaction_hash.clone(), event))
+                .map(|event| Self::from_event(transaction_version.clone(), event))
                 .collect::<Vec<EventModel>>(),
         )
     }

@@ -96,6 +96,58 @@ impl TransactionFetcherTrait for TransactionFetcher {
         transaction
     }
 
+    async fn fetch_next_batch(&mut self, batch_size : u8) -> Vec<Transaction> {
+        let mut transactions_buffer = self.transactions_buffer.lock().await;
+        let mut batch_transactions = Vec::new();
+        if transactions_buffer.is_empty() {
+            // Fill it up!
+            loop {
+                let res = self
+                    .client
+                    .get_transactions(Some(self.version), Some(TRANSACTION_FETCH_BATCH_SIZE))
+                    .await;
+                match res {
+                    Ok(response) => {
+                        FETCHED_TRANSACTION.inc();
+                        let mut transactions = response.into_inner();
+                        transactions.reverse();
+                        *transactions_buffer = transactions;
+                        break;
+                    }
+                    Err(err) => {
+                        let err_str = err.to_string();
+                        // If it's a 404, then we're all caught up; no need to increment the `UNABLE_TO_FETCH_TRANSACTION` counter
+                        if err_str.contains("404") {
+                            aptos_logger::debug!(
+                            "Could not fetch {} transactions starting at {}: all caught up. Will check again in {}ms.",
+                            TRANSACTION_FETCH_BATCH_SIZE,
+                            self.version,
+                            RETRY_TIME_MILLIS,
+                        );
+                            tokio::time::sleep(Duration::from_millis(RETRY_TIME_MILLIS)).await;
+                            continue;
+                        }
+                        UNABLE_TO_FETCH_TRANSACTION.inc();
+                        aptos_logger::error!(
+                            "Could not fetch {} transactions starting at {}, will retry in {}ms. Err: {:?}",
+                            TRANSACTION_FETCH_BATCH_SIZE,
+                            self.version,
+                            RETRY_TIME_MILLIS,
+                            err
+                        );
+                        tokio::time::sleep(Duration::from_millis(RETRY_TIME_MILLIS)).await;
+                    }
+                };
+            }
+        }
+        // At this point we're guaranteed to have something in the buffer
+        for _i in 0..batch_size {
+            batch_transactions.push(transactions_buffer.pop().unwrap());
+            self.version += 1;
+        }
+        batch_transactions
+    }
+
     /// fetches one version; this used for error checking/repair/etc
     /// In the event it can't, it will keep retrying every RETRY_TIME_MILLIS ms
     async fn fetch_version(&self, version: u64) -> Transaction {
@@ -129,6 +181,8 @@ pub trait TransactionFetcherTrait: Send + Sync {
     async fn fetch_ledger_info(&mut self) -> State;
 
     async fn fetch_next(&mut self) -> Transaction;
+
+    async fn fetch_next_batch(&mut self, batch_size : u8) -> Vec<Transaction>;
 
     async fn fetch_version(&self, _version: u64) -> Transaction;
 }

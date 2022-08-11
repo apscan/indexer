@@ -65,7 +65,7 @@ fn update_mint_token(
     // update the supply
     let result = diesel::update(token_datas.find(event_data.id.to_string()))
         .set((
-            supply.eq(supply + event_data.amount),
+            supply.eq(supply + event_data.amount.parse::<i64>().unwrap()),
             last_minted_at.eq(last_mint_time),
         ))
         .get_result::<TokenData>(conn);
@@ -121,12 +121,12 @@ fn insert_token_data(
         collection: event_data.id.collection,
         name: event_data.id.name,
         description: event_data.description,
-        max_amount: event_data.maximum,
+        max_amount: event_data.maximum.to_string(),
         supply: 0, // supply only updated with mint event
         uri: event_data.uri,
         royalty_payee_address: event_data.royalty_payee_address,
-        royalty_points_denominator: event_data.royalty_points_denominator,
-        royalty_points_numerator: event_data.royalty_points_numerator,
+        royalty_points_denominator: event_data.royalty_points_denominator.to_string(),
+        royalty_points_numerator: event_data.royalty_points_numerator.to_string(),
         mutability_config: event_data.mutability_config.to_string(),
         property_keys: event_data.property_keys.to_string(),
         property_values: event_data.property_values.to_string(),
@@ -220,10 +220,10 @@ fn process_token_on_chain_data(
                 insert_collection(conn, event_data, txn);
             }
             TokenEvent::DepositEvent(event_data) => {
-                update_token_ownership(conn, event_data.id.to_string(), txn, event_data.amount);
+                update_token_ownership(conn, event_data.id.to_string(), txn, event_data.amount.parse::<i64>().unwrap());
             }
             TokenEvent::WithdrawEvent(event_data) => {
-                update_token_ownership(conn, event_data.id.to_string(), txn, -event_data.amount);
+                update_token_ownership(conn, event_data.id.to_string(), txn, -event_data.amount.parse::<i64>().unwrap());
             }
             TokenEvent::MutateTokenPropertyMapEvent(event_data) => {
                 insert_token_properties(conn, event_data, txn);

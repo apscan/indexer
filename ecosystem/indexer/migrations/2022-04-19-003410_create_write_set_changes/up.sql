@@ -3,11 +3,10 @@
 CREATE TABLE write_set_changes
 (
     -- join from "transactions"
-    transaction_hash VARCHAR(255) NOT NULL,
+    transaction_version          BIGINT       NOT NULL,
+    state_key_hash             VARCHAR(255)   NOT NULL,
 
-    hash             VARCHAR(255) NOT NULL,
-
-    type             TEXT         NOT NULL,
+    change_type             TEXT         NOT NULL,
     address          VARCHAR(255) NOT NULL,
 
     module           jsonb        NOT NULL,
@@ -16,10 +15,10 @@ CREATE TABLE write_set_changes
     inserted_at      TIMESTAMP    NOT NULL DEFAULT NOW(),
 
     -- Constraints
-    PRIMARY KEY (transaction_hash, hash),
+    PRIMARY KEY (transaction_version, state_key_hash),
     CONSTRAINT fk_transactions
-        FOREIGN KEY (transaction_hash)
-            REFERENCES transactions (hash)
+        FOREIGN KEY (transaction_version)
+            REFERENCES transactions (version)
 );
 
-CREATE INDEX write_set_changes_tx_hash_addr_type_index ON write_set_changes (transaction_hash, address, type);
+CREATE INDEX write_set_changes_address_hash_version_index ON write_set_changes (address, state_key_hash, transaction_version);
