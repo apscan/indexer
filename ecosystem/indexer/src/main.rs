@@ -12,7 +12,7 @@ use clap::Parser;
 use std::sync::Arc;
 
 use aptos_indexer::{
-    database::new_db_pool, default_processor::DefaultTransactionProcessor, indexer::tailer::Tailer, 
+    database::new_db_pool, default_processor::DefaultTransactionProcessor, indexer::{tailer::Tailer, syncer::Syncer}, 
     batch_processor::BatchProcessor,
     token_processor::TokenTransactionProcessor,
 };
@@ -82,8 +82,7 @@ async fn main() -> std::io::Result<()> {
     }
 
     tailer.check_or_update_chain_id().await.unwrap();
-    let pg_transaction_processor = DefaultTransactionProcessor::new(conn_pool.clone());
-    let pg_batch_processor = BatchProcessor::new(conn_pool.clone());
+    let pg_transaction_processor = DefaultTransactionProcessor::new(conn_pool.clone());    
     tailer.add_processor(Arc::new(pg_transaction_processor));
     if args.index_token_data {
         let token_transaction_processor =
@@ -106,11 +105,16 @@ async fn main() -> std::io::Result<()> {
     }
 
     info!("Indexing loop started!");
+
+    let pg_batch_processor = BatchProcessor::new(conn_pool.clone());
+    let mut syncer = Syncer::new(&args.node_url, conn_pool.clone()).unwrap();
+
+
     let mut processed: usize = starting_version as usize;
     let mut base: usize = 0;
     loop {
-        let res = tailer.process_next_batch(args.batch_size).await;
-        processed += res.len();
+        let res = syncer.process_next_batch(args.batch_size).await;
+        processed += args.batch_size as usize;
         if args.emit_every != 0 {
             let new_base: usize = processed / args.emit_every;
             if base != new_base {

@@ -7,6 +7,8 @@ use std::time::Duration;
 use tokio::sync::Mutex;
 use url::Url;
 
+use super::syncer::remove_null_bytes_from_txn;
+
 // TODO: make this configurable
 const RETRY_TIME_MILLIS: u64 = 5000;
 const TRANSACTION_FETCH_BATCH_SIZE: u16 = 500;
@@ -142,7 +144,7 @@ impl TransactionFetcherTrait for TransactionFetcher {
         }
         // At this point we're guaranteed to have something in the buffer
         for _i in 0..batch_size {
-            batch_transactions.push(transactions_buffer.pop().unwrap());
+            batch_transactions.push(remove_null_bytes_from_txn(transactions_buffer.pop().unwrap()));
             self.version += 1;
         }
         batch_transactions
