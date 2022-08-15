@@ -1,9 +1,9 @@
 // Copyright (c) Aptos
 // SPDX-License-Identifier: Apache-2.0
 #![allow(clippy::extra_unused_lifetimes)]
-use crate::{models::transactions::Transaction, schema::events};
+use crate::{models::transactions::Transaction, schema::{events, blocks}};
 use aptos_rest_client::aptos_api_types::Event as APIEvent;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Associations, Debug, Identifiable, Insertable, Queryable, Serialize)]
 #[diesel(table_name = "events")]
@@ -33,16 +33,11 @@ impl Event {
         }
     }
 
-    pub fn from_events(transaction_version: i64, events: &[APIEvent]) -> Option<Vec<Self>> {
-        if events.is_empty() {
-            return None;
-        }
-        Some(
-            events
-                .iter()
-                .map(|event| Self::from_event(transaction_version.clone(), event))
-                .collect::<Vec<EventModel>>(),
-        )
+    pub fn from_events(transaction_version: i64, events: &[APIEvent]) -> Vec<Self> {
+        events
+            .iter()
+            .map(|event| Self::from_event(transaction_version.clone(), event))
+            .collect::<Vec<EventModel>>()
     }
 }
 

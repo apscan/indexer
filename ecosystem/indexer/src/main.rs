@@ -90,9 +90,11 @@ async fn main() -> std::io::Result<()> {
         tailer.add_processor(Arc::new(token_transaction_processor));
     }
 
-    let starting_version = match args.start_from_version {
+    let _starting_version = match args.start_from_version {
         None => tailer.set_fetcher_to_lowest_processor_version().await,
-        Some(version) => tailer.set_fetcher_version(version).await,
+        Some(version) => {
+            print!("{}", version);
+            tailer.set_fetcher_version(version).await}            
     };
 
     if !args.skip_previous_errors {
@@ -108,19 +110,10 @@ async fn main() -> std::io::Result<()> {
 
     let pg_batch_processor = BatchProcessor::new(conn_pool.clone());
     let mut syncer = Syncer::new(&args.node_url, conn_pool.clone()).unwrap();
+    syncer.add_processor(Arc::new(pg_batch_processor));
 
-
-    let mut processed: usize = starting_version as usize;
-    let mut base: usize = 0;
     loop {
         let res = syncer.process_next_batch(args.batch_size).await;
-        processed += args.batch_size as usize;
-        if args.emit_every != 0 {
-            let new_base: usize = processed / args.emit_every;
-            if base != new_base {
-                base = new_base;
-                aptos_logger::info!("Indexer has processed {} versions", processed);
-            }
-        }
+        aptos_logger::info!("Indexer has processed versions {}", res.unwrap()[0].as_ref().unwrap().version);
     }
 }

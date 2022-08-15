@@ -9,6 +9,7 @@ use crate::{
     },
     models::{
         events::EventModel,
+        blocks::Block,
         transactions::{BlockMetadataTransactionModel, TransactionModel, UserTransactionModel},
         write_set_changes::WriteSetChangeModel
     },
@@ -44,6 +45,16 @@ fn insert_events(conn: &PgPoolConnection, events: &Vec<EventModel>) {
     execute_with_better_error(
         conn,
         diesel::insert_into(schema::events::table)
+            .values(events)
+            .on_conflict_do_nothing(),
+    )
+    .expect("Error inserting row into database");
+}
+
+fn insert_block_events(conn: &PgPoolConnection, events: &Vec<Block>) {
+    execute_with_better_error(
+        conn,
+        diesel::insert_into(schema::blocks::table)
             .values(events)
             .on_conflict_do_nothing(),
     )
@@ -125,7 +136,7 @@ impl BatchTransactionsProcessor for BatchProcessor {
         transactions: Arc<Vec<Transaction>>,
     ) -> Result<ProcessingResult, TransactionProcessingError> {
         let (transaction_models, user_transaction_models, block_metadata_transaction_models
-            , events, write_set_changes) =
+            , events, block_events, write_set_changes) =
             TransactionModel::from_transactions(&transactions);
 
         let start_version = transactions[0].version().unwrap_or(0);
@@ -146,6 +157,11 @@ impl BatchTransactionsProcessor for BatchProcessor {
             if !events.is_empty() {
                 insert_events(&conn, &events);
             };
+
+            if !block_events.is_empty() {
+                insert_block_events(&conn, &block_events);
+            };
+
             if !write_set_changes.is_empty() {
                 insert_write_set_changes(&conn, &write_set_changes);
             };
@@ -153,7 +169,7 @@ impl BatchTransactionsProcessor for BatchProcessor {
         });
 
         match tx_result {
-            Ok(_) => Ok(ProcessingResult::new(self.name(), start_version)),
+            Ok(_) => Ok(ProcessingResult::new(self.name(), end_version)),
             Err(err) => Err(TransactionProcessingError::TransactionCommitError((
                 anyhow::Error::from(err),
                 start_version,

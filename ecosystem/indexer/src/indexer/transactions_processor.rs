@@ -73,7 +73,7 @@ pub trait BatchTransactionsProcessor: Send + Sync + Debug {
         let res = self.process_transactions(transactions).await;
         // Handle version success/failure
         match res.as_ref() {
-            Ok(processing_result) => self.update_status_success(processing_result),
+            Ok(processing_result) => {self.update_status_success(processing_result)},
             Err(tpe) => self.update_status_err(tpe),
         };
         res
@@ -97,6 +97,13 @@ pub trait BatchTransactionsProcessor: Send + Sync + Debug {
             self.name(),
             processing_result.version
         );
+
+        println!(
+            "[{}] Marking processing version OK: {}",
+            self.name(),
+            processing_result.version
+        );
+
         PROCESSOR_SUCCESSES.with_label_values(&[self.name()]).inc();
         let psm = ProcessorStatusModel::from_processing_result_ok(processing_result);
         self.apply_processor_status(&psm);

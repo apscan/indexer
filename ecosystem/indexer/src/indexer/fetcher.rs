@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::counters::{FETCHED_TRANSACTION, UNABLE_TO_FETCH_TRANSACTION};
-use aptos_rest_client::{Client as RestClient, State, Transaction};
+use aptos_rest_client::{Client as RestClient, State, Transaction, aptos_api_types::GenesisTransaction};
 use std::time::Duration;
 use tokio::sync::Mutex;
 use url::Url;
@@ -144,8 +144,14 @@ impl TransactionFetcherTrait for TransactionFetcher {
         }
         // At this point we're guaranteed to have something in the buffer
         for _i in 0..batch_size {
-            batch_transactions.push(remove_null_bytes_from_txn(transactions_buffer.pop().unwrap()));
-            self.version += 1;
+            if !transactions_buffer.is_empty() {
+                let txn = remove_null_bytes_from_txn(transactions_buffer.pop().unwrap());
+                batch_transactions.push(txn);
+                self.version += 1;
+            }
+            else {
+                break;
+            }
         }
         batch_transactions
     }

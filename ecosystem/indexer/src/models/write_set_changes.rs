@@ -1,7 +1,7 @@
 // Copyright (c) Aptos
 // SPDX-License-Identifier: Apache-2.0
 #![allow(clippy::extra_unused_lifetimes)]
-use crate::{models::transactions::Transaction, schema::{write_set_changes}};
+use crate::{models::transactions::Transaction, schema::{write_set_changes, resource_changes}};
 use aptos_rest_client::aptos_api_types::{
     DeleteModule, DeleteResource, DeleteTableItem, WriteModule, WriteResource,
     WriteSetChange as APIWriteSetChange, WriteTableItem,
@@ -83,7 +83,10 @@ impl WriteSetChange {
                 address,
                 state_key_hash,
                 data,
-            }) => WriteSetChange {
+            }) => 
+            {
+                println!("{}", serde_json::to_value(data.clone().try_parse_abi().unwrap()).unwrap());
+                WriteSetChange {
                 transaction_version,
                 state_key_hash: state_key_hash.clone(),
                 change_type: write_set_change.type_str().to_string(),
@@ -92,7 +95,7 @@ impl WriteSetChange {
                 resource: Default::default(),
                 data: serde_json::to_value(data).unwrap(),
                 inserted_at: chrono::Utc::now().naive_utc(),
-            },
+            }},
             APIWriteSetChange::WriteResource(WriteResource {
                 address,
                 state_key_hash,
@@ -147,6 +150,55 @@ impl WriteSetChange {
         )
     }
 }
+
+#[derive(AsChangeset, Associations, Debug, Identifiable, Insertable, Queryable, Serialize)]
+#[diesel(table_name = "resource_changes")]
+#[belongs_to(Transaction, foreign_key = "transaction_version")]
+#[primary_key(transaction_version, state_key_hash)]
+pub struct ResourceChange {
+    pub transaction_version: i64,
+    pub transaction_index: i32,
+    pub is_write: bool,
+    pub address: String,
+    pub state_key_hash: String,
+    pub move_module_tag: serde_json::Value,
+    pub move_module_value: serde_json::Value,
+}
+
+impl ResourceChange{
+    pub fn from_write_resource(
+        transaction_version: i64,
+        transaction_index: i32,
+        write_resource: WriteResource
+    ) -> Self {
+        ResourceChange {
+            transaction_version,
+            transaction_index,
+            is_write: true,
+            address: write_resource.address.to_string(),
+            state_key_hash: write_resource.state_key_hash.clone(),
+            move_module_tag: serde_json::to_value(write_resource.data.typ).unwrap(),
+            move_module_value: serde_json::to_value(write_resource.data.data).unwrap()
+        }
+    }
+
+    pub fn from_delete_resource(
+        transaction_version: i64,
+        transaction_index: i32,
+        delete_resource: DeleteResource
+    ) -> Self {
+        ResourceChange {
+            transaction_version,
+            transaction_index,
+            is_write: true,
+            address: delete_resource.address.to_string(),
+            state_key_hash: delete_resource.state_key_hash.clone(),
+            move_module_tag: serde_json::to_value(delete_resource.resource).unwrap(),
+            move_module_value: Default::default()
+        }
+    }
+}
+
 
 // Prevent conflicts with other things named `WriteSetChange`
 pub type WriteSetChangeModel = WriteSetChange;

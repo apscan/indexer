@@ -10,7 +10,7 @@ use crate::{
     models::{
         events::EventModel,
         transactions::{BlockMetadataTransactionModel, TransactionModel, UserTransactionModel},
-        write_set_changes::WriteSetChangeModel
+        write_set_changes::WriteSetChangeModel, blocks::Block
     },
     schema,
 };
@@ -39,6 +39,16 @@ impl Debug for DefaultTransactionProcessor {
             state.connections, state.idle_connections
         )
     }
+}
+
+fn insert_block_events(conn: &PgPoolConnection, events: &Vec<Block>) {
+    execute_with_better_error(
+        conn,
+        diesel::insert_into(schema::blocks::table)
+            .values(events)
+            .on_conflict_do_nothing(),
+    )
+    .expect("Error inserting row into database");
 }
 
 fn insert_events(conn: &PgPoolConnection, events: &Vec<EventModel>) {
@@ -133,7 +143,7 @@ impl TransactionProcessor for DefaultTransactionProcessor {
         transaction: Arc<Transaction>,
     ) -> Result<ProcessingResult, TransactionProcessingError> {
         let version = transaction.version().unwrap_or(0);
-        let (transaction_model, maybe_details_model, maybe_events, maybe_write_set_changes) =
+        let (transaction_model, maybe_details_model, maybe_blocks, maybe_events, maybe_write_set_changes) =
             TransactionModel::from_transaction(&transaction);
 
         let conn = self.get_conn();
@@ -161,6 +171,9 @@ impl TransactionProcessor for DefaultTransactionProcessor {
                 };
             };
 
+            if let Some(blocks) = maybe_blocks {
+                insert_block_events(&conn, &blocks);
+            };
             if let Some(events) = maybe_events {
                 insert_events(&conn, &events);
             };

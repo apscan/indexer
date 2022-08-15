@@ -33,3 +33,17 @@ CREATE TABLE events
 
 CREATE INDEX event_key_txn_version ON events (transaction_version);
 CREATE INDEX event_key_seq_type_index ON events (key, sequence_number, type);
+
+CREATE TABLE blocks
+(
+    transaction_version BIGINT NOT NULL,
+    epoch               BIGINT NOT NULL,
+    round               BIGINT NOT NULL,
+    height              BIGINT NOT NULL UNIQUE PRIMARY KEY,
+    hash                VARCHAR(255),
+    time_microseconds   BIGINT NOT NULL,
+    previous_block_votes jsonb NOT NULL,
+    failed_proposer_indices jsonb NOT NULL
+);
+
+CREATE UNIQUE INDEX transaction_version_index ON events (transaction_version);

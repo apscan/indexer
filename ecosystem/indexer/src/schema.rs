@@ -24,6 +24,19 @@ table! {
 }
 
 table! {
+    blocks (height) {
+        transaction_version -> Int8,
+        epoch -> Int8,
+        round -> Int8,
+        height -> Int8,
+        hash -> Nullable<Varchar>,
+        time_microseconds -> Int8,
+        previous_block_votes -> Jsonb,
+        failed_proposer_indices -> Jsonb,
+    }
+}
+
+table! {
     collections (collection_id) {
         collection_id -> Varchar,
         creator -> Varchar,
@@ -72,6 +85,20 @@ table! {
 }
 
 table! {
+    module_changes (transaction_version, transaction_index) {
+        transaction_version -> Int8,
+        transaction_index -> Int4,
+        is_write -> Bool,
+        address -> Varchar,
+        state_key_hash -> Varchar,
+        move_module_address -> Varchar,
+        move_module_name -> Varchar,
+        move_module_bytecode -> Varchar,
+        move_module_abi -> Jsonb,
+    }
+}
+
+table! {
     ownerships (ownership_id) {
         ownership_id -> Varchar,
         token_id -> Nullable<Varchar>,
@@ -89,6 +116,30 @@ table! {
         success -> Bool,
         details -> Nullable<Text>,
         last_updated -> Timestamp,
+    }
+}
+
+table! {
+    resource_changes (transaction_version, transaction_index) {
+        transaction_version -> Int8,
+        transaction_index -> Int4,
+        is_write -> Bool,
+        address -> Varchar,
+        state_key_hash -> Varchar,
+        move_module_tag -> Jsonb,
+        move_module_value -> Jsonb,
+    }
+}
+
+table! {
+    table_item_changes (transaction_version, transaction_index) {
+        transaction_version -> Int8,
+        transaction_index -> Int4,
+        is_write -> Bool,
+        state_key_hash -> Varchar,
+        handle -> Varchar,
+        key -> Varchar,
+        value -> Varchar,
     }
 }
 
@@ -188,12 +239,16 @@ table! {
 allow_tables_to_appear_in_same_query!(
     account_resources,
     block_metadata_transactions,
+    blocks,
     collections,
     events,
     ledger_infos,
     metadatas,
+    module_changes,
     ownerships,
     processor_statuses,
+    resource_changes,
+    table_item_changes,
     token_activities,
     token_datas,
     token_propertys,

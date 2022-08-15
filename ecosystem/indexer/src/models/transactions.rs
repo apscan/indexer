@@ -20,6 +20,8 @@ use diesel::{
 use futures::future::Either;
 use serde::Serialize;
 
+use super::blocks::Block;
+
 static SECONDS_IN_10_YEARS: i64 = 60 * 60 * 24 * 365 * 10;
 
 #[derive(AsChangeset, Debug, Identifiable, Insertable, Queryable, Serialize)]
@@ -196,6 +198,7 @@ impl Transaction {
     ) -> (
         Transaction,
         Option<Either<UserTransaction, BlockMetadataTransaction>>,
+        Option<Vec<Block>>,
         Option<Vec<EventModel>>,
         Option<Vec<WriteSetChangeModel>>,
     ) {
@@ -207,46 +210,54 @@ impl Transaction {
                     transaction.type_str().to_string(),
                 ),
                 Some(Either::Left(UserTransaction::from_transaction(tx))),
-                EventModel::from_events(*tx.info.version.inner() as i64, &tx.events),
+                None,
+                Some(EventModel::from_events(*tx.info.version.inner() as i64, &tx.events)),
                 WriteSetChangeModel::from_write_set_changes(
                     *tx.info.version.inner() as i64,
                     &tx.info.changes,
                 ),
             ),
-            APITransaction::GenesisTransaction(tx) => (
-                Self::from_transaction_info(
+            APITransaction::GenesisTransaction(tx) => {
+                let events = EventModel::from_events(*tx.info.version.inner() as i64, &tx.events);
+                (Self::from_transaction_info(
                     &tx.info,
                     serde_json::to_value(&tx.payload).unwrap(),
                     transaction.type_str().to_string(),
                 ),
                 None,
-                EventModel::from_events(*tx.info.version.inner() as i64, &tx.events),
+                Some(Block::from_events(String::new(), &events)),
+                Some(events),
                 WriteSetChangeModel::from_write_set_changes(
                     *tx.info.version.inner() as i64,
                     &tx.info.changes,
-                ),
-            ),
-            APITransaction::BlockMetadataTransaction(tx) => (
-                Self::from_transaction_info(
-                    &tx.info,
-                    serde_json::Value::Null,
-                    transaction.type_str().to_string(),
-                ),
-                Some(Either::Right(BlockMetadataTransaction::from_transaction(
-                    tx,
-                ))),
-                EventModel::from_events(*tx.info.version.inner() as i64, &tx.events),
-                WriteSetChangeModel::from_write_set_changes(
-                    *tx.info.version.inner() as i64,
-                    &tx.info.changes,
-                ),
-            ),
+                ))
+            }
+            APITransaction::BlockMetadataTransaction(tx) => {
+                let txn = BlockMetadataTransaction::from_transaction(tx,);
+                let block_hash = txn.id.clone();
+                let events = EventModel::from_events(*tx.info.version.inner() as i64, &tx.events);
+                (
+                    Self::from_transaction_info(
+                        &tx.info,
+                        serde_json::Value::Null,
+                        transaction.type_str().to_string(),
+                    ),
+                    Some(Either::Right(txn)),
+                    Some(Block::from_events(block_hash, &events)),
+                    Some(events),
+                    WriteSetChangeModel::from_write_set_changes(
+                        *tx.info.version.inner() as i64,
+                        &tx.info.changes,
+                    ),
+                )
+            }
             APITransaction::StateCheckpointTransaction(tx) => (
                 Self::from_transaction_info(
                     &tx.info,
                     serde_json::Value::Null,
                     transaction.type_str().to_string(),
                 ),
+                None,
                 None,
                 None,
                 None,
@@ -263,16 +274,18 @@ impl Transaction {
         Vec<UserTransaction>,
         Vec<BlockMetadataTransaction>,
         Vec<EventModel>,
+        Vec<Block>,
         Vec<WriteSetChangeModel>
     ) {
         let mut transactions = Vec::new();
         let mut user_transactions = Vec::new();
         let mut block_metadata_transactions = Vec::new();
         let mut events = Vec::new();
+        let mut blocks = Vec::new();
         let mut changes = Vec::new();
 
         for txn in new_transactions {
-            let (transaction_model, maybe_details_model, maybe_events, maybe_write_set_changes) = Self::from_transaction(&txn);
+            let (transaction_model, maybe_details_model, maybe_blocks, maybe_events, maybe_write_set_changes, ) = Self::from_transaction(&txn);
             transactions.push(transaction_model);
             match maybe_details_model {
                 None => {}
@@ -285,10 +298,17 @@ impl Transaction {
                     }
                 }
             }
+            match maybe_blocks {
+                None => {}
+                Some(maybe_blocks) => {
+                    blocks.extend(maybe_blocks);
+                }
+            }
+
             match maybe_events {
                 None => {}
                 Some(maybe_events) => {
-                    events.extend(maybe_events)
+                    events.extend(maybe_events);
                 }
             }
             match maybe_write_set_changes {
@@ -298,7 +318,7 @@ impl Transaction {
                 }
             }
         }
-        (transactions, user_transactions, block_metadata_transactions, events, changes)
+        (transactions, user_transactions, block_metadata_transactions, events, blocks, changes)
     }
 
     fn from_transaction_info(
