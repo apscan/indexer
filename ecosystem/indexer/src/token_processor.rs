@@ -245,7 +245,7 @@ impl TransactionProcessor for TokenTransactionProcessor {
     ) -> Result<ProcessingResult, TransactionProcessingError> {
         let version = transaction.version().unwrap_or(0);
 
-        let (_, maybe_details_model, _, maybe_events, _) =
+        let (_, maybe_details_model, _, maybe_events, _, _) =
             TransactionModel::from_transaction(&transaction);
 
         let conn = self.get_conn();

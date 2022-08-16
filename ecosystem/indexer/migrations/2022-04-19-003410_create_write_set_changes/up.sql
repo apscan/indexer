@@ -50,8 +50,11 @@ CREATE TABLE resource_changes
     is_write                    BOOLEAN   NOT NULL,
     address                     VARCHAR(255) NOT NULL,
     state_key_hash              VARCHAR(255) NOT NULL,
-    move_module_tag             jsonb NOT NULL,
-    move_module_value           jsonb NOT NULL,
+    move_resource_address     VARCHAR   NOT NULL,
+    move_resource_module      VARCHAR   NOT NULL,
+    move_resource_name        VARCHAR   NOT NULL,
+    move_resource_generic_type_params jsonb NOT NULL,                
+    move_resource_data           jsonb NOT NULL,
 
     -- Constraints
     PRIMARY KEY (transaction_version, transaction_index),
@@ -67,9 +70,13 @@ CREATE TABLE table_item_changes
     transaction_index           INT       NOT NULL,
     is_write                    BOOLEAN   NOT NULL,
     state_key_hash              VARCHAR(255) NOT NULL,
-    handle                      VARCHAR(255) NOT NULL,
+    handle                      VARCHAR NOT NULL,
     key                         VARCHAR NOT NULL,
     value                       VARCHAR NOT NULL,
+    table_data_key              jsonb   NOT NULL,
+    table_data_key_type         VARCHAR NOT NULL,
+    table_data_value            jsonb   NOT NULL,
+    table_data_value_type       VARCHAR NOT NULL,
 
 
     -- Constraints

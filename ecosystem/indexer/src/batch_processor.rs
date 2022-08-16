@@ -11,7 +11,7 @@ use crate::{
         events::EventModel,
         blocks::Block,
         transactions::{BlockMetadataTransactionModel, TransactionModel, UserTransactionModel},
-        write_set_changes::WriteSetChangeModel
+        write_set_changes::{WriteSetChangeModel, WriteSetChangePlural}
     },
     schema,
 };
@@ -69,6 +69,45 @@ fn insert_write_set_changes(conn: &PgPoolConnection, write_set_changes: &Vec<Wri
             .on_conflict_do_nothing(),
     )
     .expect("Error inserting row into database");
+    execute_with_better_error(
+        conn,
+        diesel::insert_into(schema::write_set_changes::table)
+            .values(write_set_changes)
+            .on_conflict_do_nothing(),
+    )
+    .expect("Error inserting row into database");
+}
+
+fn insert_write_set_plural(conn: &PgPoolConnection, write_set_plural: &WriteSetChangePlural) {
+    if !write_set_plural.module_changes.is_empty() {
+        execute_with_better_error(
+            conn,
+            diesel::insert_into(schema::module_changes::table)
+                .values(&write_set_plural.module_changes)
+                .on_conflict_do_nothing(),
+        )
+        .expect("Error inserting row into database");
+    }
+
+    if !write_set_plural.resource_changes.is_empty() {
+        execute_with_better_error(
+            conn,
+            diesel::insert_into(schema::resource_changes::table)
+                .values(&write_set_plural.resource_changes)
+                .on_conflict_do_nothing(),
+        )
+        .expect("Error inserting row into database");
+    }
+
+    if !write_set_plural.table_item_changes.is_empty() {
+        execute_with_better_error(
+            conn,
+            diesel::insert_into(schema::table_item_changes::table)
+                .values(&write_set_plural.table_item_changes)
+                .on_conflict_do_nothing(),
+        )
+        .expect("Error inserting row into database");
+    }
 }
 
 fn insert_transactions(conn: &PgPoolConnection, start_version: u64, end_version : u64, transaction_models: &Vec<TransactionModel>) {
@@ -136,7 +175,7 @@ impl BatchTransactionsProcessor for BatchProcessor {
         transactions: Arc<Vec<Transaction>>,
     ) -> Result<ProcessingResult, TransactionProcessingError> {
         let (transaction_models, user_transaction_models, block_metadata_transaction_models
-            , events, block_events, write_set_changes) =
+            , events, block_events, write_set_changes, write_set_plural) =
             TransactionModel::from_transactions(&transactions);
 
         let start_version = transactions[0].version().unwrap_or(0);
@@ -165,6 +204,9 @@ impl BatchTransactionsProcessor for BatchProcessor {
             if !write_set_changes.is_empty() {
                 insert_write_set_changes(&conn, &write_set_changes);
             };
+
+            insert_write_set_plural(&conn, &write_set_plural);
+
             Ok(())
         });
 

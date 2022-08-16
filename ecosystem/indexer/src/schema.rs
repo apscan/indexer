@@ -50,6 +50,14 @@ table! {
 }
 
 table! {
+    direct_writeset_payload (transaction_version) {
+        transaction_version -> Int8,
+        events -> Jsonb,
+        changes -> Jsonb,
+    }
+}
+
+table! {
     events (key, sequence_number) {
         transaction_version -> Int8,
         key -> Varchar,
@@ -81,6 +89,13 @@ table! {
         properties -> Nullable<Jsonb>,
         last_updated_at -> Timestamp,
         inserted_at -> Timestamp,
+    }
+}
+
+table! {
+    module_bundle_payload (transaction_version) {
+        transaction_version -> Int8,
+        module_changes -> Jsonb,
     }
 }
 
@@ -126,8 +141,41 @@ table! {
         is_write -> Bool,
         address -> Varchar,
         state_key_hash -> Varchar,
-        move_module_tag -> Jsonb,
-        move_module_value -> Jsonb,
+        move_resource_address -> Varchar,
+        move_resource_module -> Varchar,
+        move_resource_name -> Varchar,
+        move_resource_generic_type_params -> Jsonb,
+        move_resource_data -> Jsonb,
+    }
+}
+
+table! {
+    script_function_payload (transaction_version) {
+        transaction_version -> Int8,
+        script_function_module_address -> Varchar,
+        script_function_module_name -> Varchar,
+        script_function_name -> Varchar,
+        type_arguments -> Jsonb,
+        arguments -> Jsonb,
+    }
+}
+
+table! {
+    script_payload (transaction_version) {
+        transaction_version -> Int8,
+        code -> Jsonb,
+        type_arguments -> Jsonb,
+        arguments -> Jsonb,
+    }
+}
+
+table! {
+    script_writeset_payload (transaction_version) {
+        transaction_version -> Int8,
+        execute_as -> Varchar,
+        code -> Jsonb,
+        type_arguments -> Jsonb,
+        arguments -> Jsonb,
     }
 }
 
@@ -140,6 +188,10 @@ table! {
         handle -> Varchar,
         key -> Varchar,
         value -> Varchar,
+        table_data_key -> Jsonb,
+        table_data_key_type -> Varchar,
+        table_data_value -> Jsonb,
+        table_data_value_type -> Varchar,
     }
 }
 
@@ -241,13 +293,18 @@ allow_tables_to_appear_in_same_query!(
     block_metadata_transactions,
     blocks,
     collections,
+    direct_writeset_payload,
     events,
     ledger_infos,
     metadatas,
+    module_bundle_payload,
     module_changes,
     ownerships,
     processor_statuses,
     resource_changes,
+    script_function_payload,
+    script_payload,
+    script_writeset_payload,
     table_item_changes,
     token_activities,
     token_datas,

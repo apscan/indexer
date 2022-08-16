@@ -7,7 +7,7 @@
 
 use crate::{
     database::PgPoolConnection,
-    models::{events::EventModel, write_set_changes::WriteSetChangeModel},
+    models::{events::EventModel, write_set_changes::WriteSetChangeModel, write_set_changes::WriteSetChangePlural, blocks::Block},
     schema::{block_metadata_transactions, transactions, user_transactions},
 };
 use aptos_rest_client::aptos_api_types::{
@@ -19,8 +19,6 @@ use diesel::{
 };
 use futures::future::Either;
 use serde::Serialize;
-
-use super::blocks::Block;
 
 static SECONDS_IN_10_YEARS: i64 = 60 * 60 * 24 * 365 * 10;
 
@@ -201,6 +199,7 @@ impl Transaction {
         Option<Vec<Block>>,
         Option<Vec<EventModel>>,
         Option<Vec<WriteSetChangeModel>>,
+        Option<WriteSetChangePlural>
     ) {
         match transaction {
             APITransaction::UserTransaction(tx) => (
@@ -216,21 +215,25 @@ impl Transaction {
                     *tx.info.version.inner() as i64,
                     &tx.info.changes,
                 ),
+                Some(WriteSetChangePlural::from_write_set_changes(*tx.info.version.inner() as i64, &tx.info.changes))
             ),
             APITransaction::GenesisTransaction(tx) => {
                 let events = EventModel::from_events(*tx.info.version.inner() as i64, &tx.events);
-                (Self::from_transaction_info(
+                (
+                    Self::from_transaction_info(
                     &tx.info,
                     serde_json::to_value(&tx.payload).unwrap(),
                     transaction.type_str().to_string(),
                 ),
-                None,
-                Some(Block::from_events(String::new(), &events)),
-                Some(events),
-                WriteSetChangeModel::from_write_set_changes(
+                    None,
+                    Some(Block::from_events(String::new(), &events)),
+                    Some(events),
+                    WriteSetChangeModel::from_write_set_changes(
                     *tx.info.version.inner() as i64,
                     &tx.info.changes,
-                ))
+                    ),
+                    Some(WriteSetChangePlural::from_write_set_changes(*tx.info.version.inner() as i64, &tx.info.changes))
+            )
             }
             APITransaction::BlockMetadataTransaction(tx) => {
                 let txn = BlockMetadataTransaction::from_transaction(tx,);
@@ -249,6 +252,7 @@ impl Transaction {
                         *tx.info.version.inner() as i64,
                         &tx.info.changes,
                     ),
+                    Some(WriteSetChangePlural::from_write_set_changes(*tx.info.version.inner() as i64, &tx.info.changes))
                 )
             }
             APITransaction::StateCheckpointTransaction(tx) => (
@@ -257,6 +261,7 @@ impl Transaction {
                     serde_json::Value::Null,
                     transaction.type_str().to_string(),
                 ),
+                None,
                 None,
                 None,
                 None,
@@ -275,7 +280,8 @@ impl Transaction {
         Vec<BlockMetadataTransaction>,
         Vec<EventModel>,
         Vec<Block>,
-        Vec<WriteSetChangeModel>
+        Vec<WriteSetChangeModel>,
+        WriteSetChangePlural,
     ) {
         let mut transactions = Vec::new();
         let mut user_transactions = Vec::new();
@@ -283,9 +289,10 @@ impl Transaction {
         let mut events = Vec::new();
         let mut blocks = Vec::new();
         let mut changes = Vec::new();
+        let mut write_set_plural = WriteSetChangePlural::new();
 
         for txn in new_transactions {
-            let (transaction_model, maybe_details_model, maybe_blocks, maybe_events, maybe_write_set_changes, ) = Self::from_transaction(&txn);
+            let (transaction_model, maybe_details_model, maybe_blocks, maybe_events, maybe_write_set_changes, maybe_changes_plural) = Self::from_transaction(&txn);
             transactions.push(transaction_model);
             match maybe_details_model {
                 None => {}
@@ -317,8 +324,14 @@ impl Transaction {
                     changes.extend(maybe_write_set_changes)
                 }
             }
+            match maybe_changes_plural {
+                None => {}
+                Some(maybe_changes_plural_data) => {
+                    write_set_plural.extend(maybe_changes_plural_data);
+                }
+            }
         }
-        (transactions, user_transactions, block_metadata_transactions, events, blocks, changes)
+        (transactions, user_transactions, block_metadata_transactions, events, blocks, changes, write_set_plural)
     }
 
     fn from_transaction_info(

@@ -10,7 +10,7 @@ use crate::{
     models::{
         events::EventModel,
         transactions::{BlockMetadataTransactionModel, TransactionModel, UserTransactionModel},
-        write_set_changes::WriteSetChangeModel, blocks::Block
+        write_set_changes::{WriteSetChangeModel, WriteSetChangePlural}, blocks::Block
     },
     schema,
 };
@@ -69,6 +69,38 @@ fn insert_write_set_changes(conn: &PgPoolConnection, write_set_changes: &Vec<Wri
             .on_conflict_do_nothing(),
     )
     .expect("Error inserting row into database");
+}
+
+fn insert_write_set_plural(conn: &PgPoolConnection, write_set_plural: &WriteSetChangePlural) {
+    if !write_set_plural.module_changes.is_empty() {
+        execute_with_better_error(
+            conn,
+            diesel::insert_into(schema::module_changes::table)
+                .values(&write_set_plural.module_changes)
+                .on_conflict_do_nothing(),
+        )
+        .expect("Error inserting row into database");
+    }
+
+    if !write_set_plural.resource_changes.is_empty() {
+        execute_with_better_error(
+            conn,
+            diesel::insert_into(schema::resource_changes::table)
+                .values(&write_set_plural.resource_changes)
+                .on_conflict_do_nothing(),
+        )
+        .expect("Error inserting row into database");
+    }
+
+    if !write_set_plural.table_item_changes.is_empty() {
+        execute_with_better_error(
+            conn,
+            diesel::insert_into(schema::table_item_changes::table)
+                .values(&write_set_plural.table_item_changes)
+                .on_conflict_do_nothing(),
+        )
+        .expect("Error inserting row into database");
+    }
 }
 
 fn insert_transaction(conn: &PgPoolConnection, version: u64, transaction_model: &TransactionModel) {
@@ -143,7 +175,7 @@ impl TransactionProcessor for DefaultTransactionProcessor {
         transaction: Arc<Transaction>,
     ) -> Result<ProcessingResult, TransactionProcessingError> {
         let version = transaction.version().unwrap_or(0);
-        let (transaction_model, maybe_details_model, maybe_blocks, maybe_events, maybe_write_set_changes) =
+        let (transaction_model, maybe_details_model, maybe_blocks, maybe_events, maybe_write_set_changes, maybe_write_set_plural) =
             TransactionModel::from_transaction(&transaction);
 
         let conn = self.get_conn();
@@ -179,6 +211,9 @@ impl TransactionProcessor for DefaultTransactionProcessor {
             };
             if let Some(write_set_changes) = maybe_write_set_changes {
                 insert_write_set_changes(&conn, &write_set_changes);
+            };
+            if let Some(maybe_write_set_plural) = maybe_write_set_plural {
+                insert_write_set_plural(&conn, &maybe_write_set_plural);
             };
             Ok(())
         });
