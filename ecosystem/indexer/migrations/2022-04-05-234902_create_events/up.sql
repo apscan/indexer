@@ -52,6 +52,10 @@ CREATE TABLE blocks
     time_microseconds   BIGINT NOT NULL,
     previous_block_votes jsonb NOT NULL,
     failed_proposer_indices jsonb NOT NULL
+
+    CONSTRAINT fk_transactions
+        FOREIGN KEY (transaction_version)
+            REFERENCES transactions (version)
 );
 
 CREATE UNIQUE INDEX transaction_version_index ON events (transaction_version);
