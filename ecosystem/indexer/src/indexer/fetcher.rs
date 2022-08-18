@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::counters::{FETCHED_TRANSACTION, UNABLE_TO_FETCH_TRANSACTION};
-use aptos_rest_client::{Client as RestClient, State, Transaction, aptos_api_types::GenesisTransaction};
+use aptos_rest_client::{Client as RestClient, State, Transaction};
 use std::time::Duration;
 use tokio::sync::Mutex;
 use url::Url;

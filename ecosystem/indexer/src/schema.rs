@@ -50,7 +50,7 @@ table! {
 }
 
 table! {
-    direct_writeset_payload (transaction_version) {
+    direct_write_set_payloads (transaction_version) {
         transaction_version -> Int8,
         events -> Jsonb,
         changes -> Jsonb,
@@ -58,14 +58,23 @@ table! {
 }
 
 table! {
+    event_keys (key) {
+        key -> Varchar,
+        account -> Varchar,
+        creation_num -> Int8,
+        move_type -> Jsonb,
+    }
+}
+
+table! {
     events (key, sequence_number) {
         transaction_version -> Int8,
+        transaction_index -> Int4,
         key -> Varchar,
         sequence_number -> Int8,
         #[sql_name = "type"]
         type_ -> Text,
         data -> Jsonb,
-        inserted_at -> Timestamp,
     }
 }
 
@@ -93,9 +102,9 @@ table! {
 }
 
 table! {
-    module_bundle_payload (transaction_version) {
+    module_bundle_payloads (transaction_version) {
         transaction_version -> Int8,
-        module_changes -> Jsonb,
+        modules -> Jsonb,
     }
 }
 
@@ -150,7 +159,7 @@ table! {
 }
 
 table! {
-    script_function_payload (transaction_version) {
+    script_function_payloads (transaction_version) {
         transaction_version -> Int8,
         script_function_module_address -> Varchar,
         script_function_module_name -> Varchar,
@@ -161,19 +170,21 @@ table! {
 }
 
 table! {
-    script_payload (transaction_version) {
+    script_payloads (transaction_version) {
         transaction_version -> Int8,
-        code -> Jsonb,
+        code -> Varchar,
+        abi -> Jsonb,
         type_arguments -> Jsonb,
         arguments -> Jsonb,
     }
 }
 
 table! {
-    script_writeset_payload (transaction_version) {
+    script_write_set_payloads (transaction_version) {
         transaction_version -> Int8,
         execute_as -> Varchar,
-        code -> Jsonb,
+        code -> Varchar,
+        abi -> Jsonb,
         type_arguments -> Jsonb,
         arguments -> Jsonb,
     }
@@ -293,18 +304,19 @@ allow_tables_to_appear_in_same_query!(
     block_metadata_transactions,
     blocks,
     collections,
-    direct_writeset_payload,
+    direct_write_set_payloads,
+    event_keys,
     events,
     ledger_infos,
     metadatas,
-    module_bundle_payload,
+    module_bundle_payloads,
     module_changes,
     ownerships,
     processor_statuses,
     resource_changes,
-    script_function_payload,
-    script_payload,
-    script_writeset_payload,
+    script_function_payloads,
+    script_payloads,
+    script_write_set_payloads,
     table_item_changes,
     token_activities,
     token_datas,

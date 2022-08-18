@@ -7,18 +7,28 @@
 
 use crate::{
     database::PgPoolConnection,
-    models::{events::EventModel, write_set_changes::WriteSetChangeModel, write_set_changes::WriteSetChangePlural, blocks::Block},
-    schema::{block_metadata_transactions, transactions, user_transactions},
+    models::{
+        blocks::Block, events::EventModel, payloads::TransactionPayloadModel,
+        write_set_changes::WriteSetChangeModel, write_set_changes::WriteSetChangePlural,
+    },
+    schema::{
+        block_metadata_transactions,
+        transactions,
+        user_transactions,
+    },
 };
 use aptos_rest_client::aptos_api_types::{
     Address, BlockMetadataTransaction as APIBlockMetadataTransaction,
     Transaction as APITransaction, TransactionInfo, UserTransaction as APIUserTransaction, U64,
+    GenesisPayload, TransactionPayload
 };
 use diesel::{
     BelongingToDsl, ExpressionMethods, GroupedBy, OptionalExtension, QueryDsl, RunQueryDsl,
 };
 use futures::future::Either;
 use serde::Serialize;
+
+use super::{payloads::TransactionPayloadPlural, events::EventModelPlural};
 
 static SECONDS_IN_10_YEARS: i64 = 60 * 60 * 24 * 365 * 10;
 
@@ -196,10 +206,11 @@ impl Transaction {
     ) -> (
         Transaction,
         Option<Either<UserTransaction, BlockMetadataTransaction>>,
+        Option<TransactionPayloadModel>,
         Option<Vec<Block>>,
-        Option<Vec<EventModel>>,
+        Option<EventModelPlural>,
         Option<Vec<WriteSetChangeModel>>,
-        Option<WriteSetChangePlural>
+        Option<WriteSetChangePlural>,
     ) {
         match transaction {
             APITransaction::UserTransaction(tx) => (
@@ -209,36 +220,59 @@ impl Transaction {
                     transaction.type_str().to_string(),
                 ),
                 Some(Either::Left(UserTransaction::from_transaction(tx))),
+                Some(TransactionPayloadModel::from_transaction_payload(
+                    *tx.info.version.inner() as i64,
+                    tx.request.payload.clone(),
+                )),
                 None,
-                Some(EventModel::from_events(*tx.info.version.inner() as i64, &tx.events)),
+                Some(EventModelPlural::from_events(
+                    *tx.info.version.inner() as i64,
+                    &tx.events,
+                )),
                 WriteSetChangeModel::from_write_set_changes(
                     *tx.info.version.inner() as i64,
                     &tx.info.changes,
                 ),
-                Some(WriteSetChangePlural::from_write_set_changes(*tx.info.version.inner() as i64, &tx.info.changes))
-            ),
-            APITransaction::GenesisTransaction(tx) => {
-                let events = EventModel::from_events(*tx.info.version.inner() as i64, &tx.events);
-                (
-                    Self::from_transaction_info(
-                    &tx.info,
-                    serde_json::to_value(&tx.payload).unwrap(),
-                    transaction.type_str().to_string(),
-                ),
-                    None,
-                    Some(Block::from_events(String::new(), &events)),
-                    Some(events),
-                    WriteSetChangeModel::from_write_set_changes(
+                Some(WriteSetChangePlural::from_write_set_changes(
                     *tx.info.version.inner() as i64,
                     &tx.info.changes,
+                )),
+            ),
+            APITransaction::GenesisTransaction(tx) => {
+                let transaction_payload = match  &tx.payload {
+                    GenesisPayload::WriteSetPayload(data) => {
+                        TransactionPayload::WriteSetPayload(data.clone())
+                    }
+                };
+                (
+                    Self::from_transaction_info(
+                        &tx.info,
+                        serde_json::to_value(&tx.payload).unwrap(),
+                        transaction.type_str().to_string(),
                     ),
-                    Some(WriteSetChangePlural::from_write_set_changes(*tx.info.version.inner() as i64, &tx.info.changes))
-            )
+                    None,
+                    Some(TransactionPayloadModel::from_transaction_payload(
+                        *tx.info.version.inner() as i64,
+                        transaction_payload,
+                    )),
+                    Some(Block::from_events(*tx.info.version.inner() as i64, String::new(), &tx.events)),
+                    Some(EventModelPlural::from_events(
+                        *tx.info.version.inner() as i64,
+                        &tx.events,
+                    )),
+                    WriteSetChangeModel::from_write_set_changes(
+                        *tx.info.version.inner() as i64,
+                        &tx.info.changes,
+                    ),
+                    Some(WriteSetChangePlural::from_write_set_changes(
+                        *tx.info.version.inner() as i64,
+                        &tx.info.changes,
+                    )),
+                )
             }
             APITransaction::BlockMetadataTransaction(tx) => {
-                let txn = BlockMetadataTransaction::from_transaction(tx,);
+                let txn = BlockMetadataTransaction::from_transaction(tx);
                 let block_hash = txn.id.clone();
-                let events = EventModel::from_events(*tx.info.version.inner() as i64, &tx.events);
                 (
                     Self::from_transaction_info(
                         &tx.info,
@@ -246,13 +280,20 @@ impl Transaction {
                         transaction.type_str().to_string(),
                     ),
                     Some(Either::Right(txn)),
-                    Some(Block::from_events(block_hash, &events)),
-                    Some(events),
+                    None,
+                    Some(Block::from_events(*tx.info.version.inner() as i64, block_hash, &tx.events)),
+                    Some(EventModelPlural::from_events(
+                        *tx.info.version.inner() as i64,
+                        &tx.events,
+                    )),
                     WriteSetChangeModel::from_write_set_changes(
                         *tx.info.version.inner() as i64,
                         &tx.info.changes,
                     ),
-                    Some(WriteSetChangePlural::from_write_set_changes(*tx.info.version.inner() as i64, &tx.info.changes))
+                    Some(WriteSetChangePlural::from_write_set_changes(
+                        *tx.info.version.inner() as i64,
+                        &tx.info.changes,
+                    )),
                 )
             }
             APITransaction::StateCheckpointTransaction(tx) => (
@@ -266,6 +307,7 @@ impl Transaction {
                 None,
                 None,
                 None,
+                None,
             ),
             APITransaction::PendingTransaction(..) => {
                 unreachable!()
@@ -273,12 +315,14 @@ impl Transaction {
         }
     }
 
-
-    pub fn from_transactions(new_transactions : &Vec<APITransaction>) -> (
+    pub fn from_transactions(
+        new_transactions: &Vec<APITransaction>,
+    ) -> (
         Vec<Transaction>,
         Vec<UserTransaction>,
         Vec<BlockMetadataTransaction>,
-        Vec<EventModel>,
+        TransactionPayloadPlural,
+        EventModelPlural,
         Vec<Block>,
         Vec<WriteSetChangeModel>,
         WriteSetChangePlural,
@@ -286,13 +330,22 @@ impl Transaction {
         let mut transactions = Vec::new();
         let mut user_transactions = Vec::new();
         let mut block_metadata_transactions = Vec::new();
-        let mut events = Vec::new();
+        let mut payload_plural = TransactionPayloadPlural::new();
+        let mut event_plural = EventModelPlural::new();
         let mut blocks = Vec::new();
         let mut changes = Vec::new();
         let mut write_set_plural = WriteSetChangePlural::new();
 
         for txn in new_transactions {
-            let (transaction_model, maybe_details_model, maybe_blocks, maybe_events, maybe_write_set_changes, maybe_changes_plural) = Self::from_transaction(&txn);
+            let (
+                transaction_model,
+                maybe_details_model,
+                maybe_payload,
+                maybe_blocks,
+                maybe_event_plural,
+                maybe_write_set_changes,
+                maybe_changes_plural,
+            ) = Self::from_transaction(&txn);
             transactions.push(transaction_model);
             match maybe_details_model {
                 None => {}
@@ -303,8 +356,16 @@ impl Transaction {
                     Either::Right(block_metadata_transaction_model) => {
                         block_metadata_transactions.push(block_metadata_transaction_model);
                     }
+                },
+            }
+
+            match maybe_payload {
+                None => {}
+                Some(payload_data) => {
+                    payload_plural.append(payload_data);
                 }
             }
+
             match maybe_blocks {
                 None => {}
                 Some(maybe_blocks) => {
@@ -312,17 +373,15 @@ impl Transaction {
                 }
             }
 
-            match maybe_events {
+            match maybe_event_plural {
                 None => {}
-                Some(maybe_events) => {
-                    events.extend(maybe_events);
+                Some(event_plural_data) => {
+                    event_plural.extend(event_plural_data);
                 }
             }
             match maybe_write_set_changes {
                 None => {}
-                Some(maybe_write_set_changes) => {
-                    changes.extend(maybe_write_set_changes)
-                }
+                Some(maybe_write_set_changes) => changes.extend(maybe_write_set_changes),
             }
             match maybe_changes_plural {
                 None => {}
@@ -331,7 +390,16 @@ impl Transaction {
                 }
             }
         }
-        (transactions, user_transactions, block_metadata_transactions, events, blocks, changes, write_set_plural)
+        (
+            transactions,
+            user_transactions,
+            block_metadata_transactions,
+            payload_plural,
+            event_plural,
+            blocks,
+            changes,
+            write_set_plural,
+        )
     }
 
     fn from_transaction_info(

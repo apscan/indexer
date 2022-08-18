@@ -1,7 +1,7 @@
 // Copyright (c) Aptos
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
-    database::{execute_with_better_error, PgDbPool},
+    database::PgDbPool,
     indexer::{
         errors::TransactionProcessingError,
         fetcher::{TransactionFetcher, TransactionFetcherTrait},

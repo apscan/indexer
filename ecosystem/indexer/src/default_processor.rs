@@ -8,15 +8,17 @@ use crate::{
         transaction_processor::TransactionProcessor,
     },
     models::{
-        events::EventModel,
+        blocks::Block,
+        events::EventModelPlural,
+        payloads::TransactionPayloadModel,
         transactions::{BlockMetadataTransactionModel, TransactionModel, UserTransactionModel},
-        write_set_changes::{WriteSetChangeModel, WriteSetChangePlural}, blocks::Block
+        write_set_changes::{WriteSetChangeModel, WriteSetChangePlural},
     },
     schema,
 };
 use aptos_rest_client::Transaction;
 use async_trait::async_trait;
-use diesel::{Connection};
+use diesel::Connection;
 use futures::future::Either;
 use std::{fmt::Debug, sync::Arc};
 
@@ -51,14 +53,24 @@ fn insert_block_events(conn: &PgPoolConnection, events: &Vec<Block>) {
     .expect("Error inserting row into database");
 }
 
-fn insert_events(conn: &PgPoolConnection, events: &Vec<EventModel>) {
-    execute_with_better_error(
-        conn,
-        diesel::insert_into(schema::events::table)
-            .values(events)
-            .on_conflict_do_nothing(),
-    )
-    .expect("Error inserting row into database");
+fn insert_event_plural(conn: &PgPoolConnection, event_plural: &EventModelPlural) {
+    if !event_plural.events.is_empty() {
+        execute_with_better_error(
+            conn,
+            diesel::insert_into(schema::events::table)
+                .values(&event_plural.events)
+                .on_conflict_do_nothing(),
+        )
+        .expect("Error inserting row into database");
+
+        execute_with_better_error(
+            conn,
+            diesel::insert_into(schema::event_keys::table)
+                .values(&event_plural.event_keys)
+                .on_conflict_do_nothing(),
+        )
+        .expect("Error inserting row into database");        
+    }
 }
 
 fn insert_write_set_changes(conn: &PgPoolConnection, write_set_changes: &Vec<WriteSetChangeModel>) {
@@ -101,6 +113,46 @@ fn insert_write_set_plural(conn: &PgPoolConnection, write_set_plural: &WriteSetC
         )
         .expect("Error inserting row into database");
     }
+}
+
+fn insert_payload(conn: &PgPoolConnection, payload_model: &TransactionPayloadModel) {
+    match payload_model {
+        TransactionPayloadModel::ScriptWriteSetPayload(payload_data) => execute_with_better_error(
+            conn,
+            diesel::insert_into(schema::script_write_set_payloads::table)
+                .values(payload_data)
+                .on_conflict_do_nothing(),
+        )
+        .expect("Error inserting row into database"),
+        TransactionPayloadModel::DirectWriteSetPayload(payload_data) => execute_with_better_error(
+            conn,
+            diesel::insert_into(schema::direct_write_set_payloads::table)
+                .values(payload_data)
+                .on_conflict_do_nothing(),
+        )
+        .expect("Error inserting row into database"),
+        TransactionPayloadModel::ScriptFunctionPayload(payload_data) => execute_with_better_error(
+            conn,
+            diesel::insert_into(schema::script_function_payloads::table)
+                .values(payload_data)
+                .on_conflict_do_nothing(),
+        )
+        .expect("Error inserting row into database"),
+        TransactionPayloadModel::ModuleBundlePayload(payload_data) => execute_with_better_error(
+            conn,
+            diesel::insert_into(schema::module_bundle_payloads::table)
+                .values(payload_data)
+                .on_conflict_do_nothing(),
+        )
+        .expect("Error inserting row into database"),
+        TransactionPayloadModel::ScriptPayload(payload_data) => execute_with_better_error(
+            conn,
+            diesel::insert_into(schema::script_payloads::table)
+                .values(payload_data)
+                .on_conflict_do_nothing(),
+        )
+        .expect("Error inserting row into database"),
+    };
 }
 
 fn insert_transaction(conn: &PgPoolConnection, version: u64, transaction_model: &TransactionModel) {
@@ -175,8 +227,15 @@ impl TransactionProcessor for DefaultTransactionProcessor {
         transaction: Arc<Transaction>,
     ) -> Result<ProcessingResult, TransactionProcessingError> {
         let version = transaction.version().unwrap_or(0);
-        let (transaction_model, maybe_details_model, maybe_blocks, maybe_events, maybe_write_set_changes, maybe_write_set_plural) =
-            TransactionModel::from_transaction(&transaction);
+        let (
+            transaction_model,
+            maybe_details_model,
+            maybe_payload,
+            maybe_blocks,
+            maybe_event_plural,
+            maybe_write_set_changes,
+            maybe_write_set_plural,
+        ) = TransactionModel::from_transaction(&transaction);
 
         let conn = self.get_conn();
 
@@ -203,11 +262,15 @@ impl TransactionProcessor for DefaultTransactionProcessor {
                 };
             };
 
+            if let Some(payload) = maybe_payload {
+                insert_payload(&conn, &payload);
+            };
+
             if let Some(blocks) = maybe_blocks {
                 insert_block_events(&conn, &blocks);
             };
-            if let Some(events) = maybe_events {
-                insert_events(&conn, &events);
+            if let Some(event_plural) = maybe_event_plural {
+                insert_event_plural(&conn, &event_plural);
             };
             if let Some(write_set_changes) = maybe_write_set_changes {
                 insert_write_set_changes(&conn, &write_set_changes);

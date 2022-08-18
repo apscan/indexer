@@ -15,14 +15,11 @@ CREATE TABLE events
 (
     -- join from "transactions"
     transaction_version BIGINT    NOT NULL,
-
+    transaction_index   INT       NOT NULL,
     key              VARCHAR(100) NOT NULL,
     sequence_number  BIGINT       NOT NULL,
     type             TEXT         NOT NULL,
     data             jsonb        NOT NULL,
-
-    -- Default time columns
-    inserted_at      TIMESTAMP    NOT NULL DEFAULT NOW(),
 
     -- Constraints
     PRIMARY KEY (key, sequence_number),
@@ -33,6 +30,17 @@ CREATE TABLE events
 
 CREATE INDEX event_key_txn_version ON events (transaction_version);
 CREATE INDEX event_key_seq_type_index ON events (key, sequence_number, type);
+
+CREATE TABLE event_keys
+(
+    -- join from "transactions"
+    key              VARCHAR      NOT NULL,
+    account          VARCHAR(255) NOT NULL,
+    creation_num     BIGINT       NOT NULL,
+    move_type        jsonb        NOT NULL,
+    -- Constraints
+    PRIMARY KEY (key)
+);
 
 CREATE TABLE blocks
 (

@@ -1,10 +1,11 @@
 -- Your SQL goes here
-CREATE TABLE script_writeset_payload
+CREATE TABLE script_write_set_payloads
 (
     -- join from "transactions"
     transaction_version       BIGINT    NOT NULL,
     execute_as                VARCHAR(255) NOT NULL,
-    code                      jsonb     NOT NULL,
+    code                      VARCHAR     NOT NULL,
+    abi                       jsonb     NOT NULL,
     type_arguments            jsonb     NOT NULL,
     arguments                 jsonb     NOT NULL,
 
@@ -16,7 +17,7 @@ CREATE TABLE script_writeset_payload
             REFERENCES transactions (version)
 );
 
-CREATE TABLE direct_writeset_payload
+CREATE TABLE direct_write_set_payloads
 (
     -- join from "transactions"
     transaction_version       BIGINT    NOT NULL,
@@ -31,7 +32,7 @@ CREATE TABLE direct_writeset_payload
             REFERENCES transactions (version)
 );
 
-CREATE TABLE script_function_payload
+CREATE TABLE script_function_payloads
 (
     -- join from "transactions"
     transaction_version                 BIGINT       NOT NULL,
@@ -49,11 +50,11 @@ CREATE TABLE script_function_payload
             REFERENCES transactions (version)
 );
 
-CREATE TABLE module_bundle_payload
+CREATE TABLE module_bundle_payloads
 (
     -- join from "transactions"
     transaction_version BIGINT       NOT NULL,
-    module_changes      jsonb        NOT NULL,
+    modules              jsonb        NOT NULL,
 
     -- Constraints
     PRIMARY KEY (transaction_version),
@@ -62,11 +63,12 @@ CREATE TABLE module_bundle_payload
             REFERENCES transactions (version)
 );
 
-CREATE TABLE script_payload
+CREATE TABLE script_payloads
 (
     -- join from "transactions"
     transaction_version BIGINT       NOT NULL,
-    code                jsonb        NOT NULL,
+    code                VARCHAR      NOT NULL,
+    abi                 jsonb        NOT NULL,
     type_arguments      jsonb        NOT NULL,
     arguments           jsonb        NOT NULL,
 

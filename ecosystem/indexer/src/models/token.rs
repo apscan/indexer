@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #![allow(clippy::extra_unused_lifetimes)]
 use crate::{models::events::Event, schema::token_datas};
-use aptos_rest_client::types;
 use std::{fmt, fmt::Formatter};
 use serde::{Deserialize, Serialize};
 

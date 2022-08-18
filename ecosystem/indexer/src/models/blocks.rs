@@ -1,5 +1,6 @@
-use crate::{models::events::EventModel, schema::blocks};
+use crate::schema::blocks;
 use serde::{Deserialize, Serialize};
+use aptos_rest_client::aptos_api_types::Event as APIEvent;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct NewBlockEventAPI {
@@ -27,13 +28,13 @@ pub struct Block {
 }
 
 impl Block {
-    pub fn from_event(block_hash : String, event: &EventModel) -> Option<Self> {
+    pub fn from_event(transaction_version: i64, block_hash : String, event: &APIEvent) -> Option<Self> {
         let data = event.data.clone();
-        match event.type_.as_str() {
+        match event.typ.to_string().as_str() {
             "0x1::block::NewBlockEvent" => {
                 let block_event = serde_json::from_value::<NewBlockEventAPI>(data).unwrap();
                 Some(Block{
-                    transaction_version: event.transaction_version,
+                    transaction_version,
                     epoch: block_event.epoch.parse::<i64>().unwrap(),
                     round: block_event.round.parse::<i64>().unwrap(),
                     height: block_event.height.parse::<i64>().unwrap(),
@@ -48,10 +49,10 @@ impl Block {
     }
 }
 
-    pub fn from_events(block_hash: String, events: &[EventModel]) -> Vec<Self> {
+    pub fn from_events(transaction_version: i64, block_hash: String, events: &[APIEvent]) -> Vec<Self> {
             events
                 .iter()
-                .filter_map(|event| Self::from_event(block_hash.clone(), event))
+                .filter_map(|event| Self::from_event(transaction_version, block_hash.clone(), event))
                 .collect()
     }
 }

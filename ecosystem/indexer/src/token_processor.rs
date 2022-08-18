@@ -245,7 +245,7 @@ impl TransactionProcessor for TokenTransactionProcessor {
     ) -> Result<ProcessingResult, TransactionProcessingError> {
         let version = transaction.version().unwrap_or(0);
 
-        let (_, maybe_details_model, _, maybe_events, _, _) =
+        let (_, maybe_details_model, _,  _, maybe_event_plural, _, _) =
             TransactionModel::from_transaction(&transaction);
 
         let conn = self.get_conn();
@@ -253,8 +253,8 @@ impl TransactionProcessor for TokenTransactionProcessor {
 
         let mut tx_result = conn.transaction::<(), diesel::result::Error, _>(|| {
             if let Some(Either::Left(user_txn)) = maybe_details_model {
-                if let Some(events) = maybe_events {
-                    process_token_on_chain_data(&conn, &events, &user_txn, &mut token_uris);
+                if let Some(event_plural) = maybe_event_plural {
+                    process_token_on_chain_data(&conn, &event_plural.events, &user_txn, &mut token_uris);
                 }
             }
             Ok(())

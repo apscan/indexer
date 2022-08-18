@@ -85,7 +85,6 @@ impl WriteSetChange {
                 data,
             }) => 
             {
-                println!("{}", serde_json::to_value(data.clone().try_parse_abi().unwrap()).unwrap());
                 WriteSetChange {
                 transaction_version,
                 state_key_hash: state_key_hash.clone(),
@@ -190,11 +189,10 @@ impl WriteSetChangePlural {
     Self{resource_changes, module_changes, table_item_changes}
     }
 
-    pub fn extend(&mut self, new_changes_plural : Self) -> &Self {
+    pub fn extend(&mut self, new_changes_plural : Self) {
         self.module_changes.extend(new_changes_plural.module_changes);
         self.resource_changes.extend(new_changes_plural.resource_changes);
         self.table_item_changes.extend(new_changes_plural.table_item_changes);
-        self
     }
 
     pub fn new() -> Self {

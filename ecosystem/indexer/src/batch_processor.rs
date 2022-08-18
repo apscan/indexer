@@ -8,10 +8,10 @@ use crate::{
         transactions_processor::BatchTransactionsProcessor,
     },
     models::{
-        events::EventModel,
+        events::EventModelPlural,
         blocks::Block,
         transactions::{BlockMetadataTransactionModel, TransactionModel, UserTransactionModel},
-        write_set_changes::{WriteSetChangeModel, WriteSetChangePlural}
+        write_set_changes::{WriteSetChangeModel, WriteSetChangePlural}, payloads::TransactionPayloadPlural
     },
     schema,
 };
@@ -41,14 +41,24 @@ impl Debug for BatchProcessor {
     }
 }
 
-fn insert_events(conn: &PgPoolConnection, events: &Vec<EventModel>) {
-    execute_with_better_error(
-        conn,
-        diesel::insert_into(schema::events::table)
-            .values(events)
-            .on_conflict_do_nothing(),
-    )
-    .expect("Error inserting row into database");
+fn insert_event_plural(conn: &PgPoolConnection, event_plural: &EventModelPlural) {
+    if !event_plural.events.is_empty() {
+        execute_with_better_error(
+            conn,
+            diesel::insert_into(schema::events::table)
+                .values(&event_plural.events)
+                .on_conflict_do_nothing(),
+        )
+        .expect("Error inserting row into database");
+
+        execute_with_better_error(
+            conn,
+            diesel::insert_into(schema::event_keys::table)
+                .values(&event_plural.event_keys)
+                .on_conflict_do_nothing(),
+        )
+        .expect("Error inserting row into database");        
+    }
 }
 
 fn insert_block_events(conn: &PgPoolConnection, events: &Vec<Block>) {
@@ -108,6 +118,59 @@ fn insert_write_set_plural(conn: &PgPoolConnection, write_set_plural: &WriteSetC
         )
         .expect("Error inserting row into database");
     }
+}
+
+fn insert_payload_plural(conn: &PgPoolConnection, payload_plural: &TransactionPayloadPlural) {
+    if !payload_plural.script_write_set_payloads.is_empty() {
+        execute_with_better_error(
+            conn,
+            diesel::insert_into(schema::script_write_set_payloads::table)
+                .values(&payload_plural.script_write_set_payloads)
+                .on_conflict_do_nothing(),
+        )
+        .expect("Error inserting row into database");
+    }
+
+    if !payload_plural.direct_write_set_payloads.is_empty() {
+        execute_with_better_error(
+            conn,
+            diesel::insert_into(schema::direct_write_set_payloads::table)
+                .values(&payload_plural.direct_write_set_payloads)
+                .on_conflict_do_nothing(),
+        )
+        .expect("Error inserting row into database");
+    }
+
+    if !payload_plural.script_function_payloads.is_empty() {
+        execute_with_better_error(
+            conn,
+            diesel::insert_into(schema::script_function_payloads::table)
+                .values(&payload_plural.script_function_payloads)
+                .on_conflict_do_nothing(),
+        )
+        .expect("Error inserting row into database");
+    }
+
+    if !payload_plural.module_bundle_payloads.is_empty() {
+        execute_with_better_error(
+            conn,
+            diesel::insert_into(schema::module_bundle_payloads::table)
+                .values(&payload_plural.module_bundle_payloads)
+                .on_conflict_do_nothing(),
+        )
+        .expect("Error inserting row into database");
+    }
+
+    if !payload_plural.script_payloads.is_empty() {
+        execute_with_better_error(
+            conn,
+            diesel::insert_into(schema::script_payloads::table)
+                .values(&payload_plural.script_payloads)
+                .on_conflict_do_nothing(),
+        )
+        .expect("Error inserting row into database");
+    }
+
 }
 
 fn insert_transactions(conn: &PgPoolConnection, start_version: u64, end_version : u64, transaction_models: &Vec<TransactionModel>) {
@@ -175,7 +238,7 @@ impl BatchTransactionsProcessor for BatchProcessor {
         transactions: Arc<Vec<Transaction>>,
     ) -> Result<ProcessingResult, TransactionProcessingError> {
         let (transaction_models, user_transaction_models, block_metadata_transaction_models
-            , events, block_events, write_set_changes, write_set_plural) =
+            , payload_plural, event_plural, block_events, write_set_changes, write_set_plural) =
             TransactionModel::from_transactions(&transactions);
 
         let start_version = transactions[0].version().unwrap_or(0);
@@ -193,9 +256,9 @@ impl BatchTransactionsProcessor for BatchProcessor {
                 insert_block_metadata_transactions(&conn, start_version, end_version, &block_metadata_transaction_models);
             }
 
-            if !events.is_empty() {
-                insert_events(&conn, &events);
-            };
+            insert_payload_plural(&conn, &payload_plural);
+            
+            insert_event_plural(&conn, &event_plural);
 
             if !block_events.is_empty() {
                 insert_block_events(&conn, &block_events);
