@@ -109,11 +109,9 @@ async fn main() -> std::io::Result<()> {
     info!("Indexing loop started!");
 
     let pg_batch_processor = BatchProcessor::new(conn_pool.clone());
-    let mut syncer = Syncer::new(&args.node_url, conn_pool.clone()).unwrap();
-    syncer.add_processor(Arc::new(pg_batch_processor));
-
+    let mut syncer = Syncer::new(&args.node_url, conn_pool.clone(), Arc::new(pg_batch_processor)).unwrap();
     loop {
         let res = syncer.process_next_batch(args.batch_size).await;
-        aptos_logger::info!("Indexer has processed versions {}", res.unwrap()[0].as_ref().unwrap().version);
+        aptos_logger::info!("Indexer has processed versions {}", res.unwrap().version);
     }
 }

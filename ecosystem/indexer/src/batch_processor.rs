@@ -18,7 +18,7 @@ use crate::{
 use aptos_rest_client::Transaction;
 use async_trait::async_trait;
 use diesel::{Connection};
-use std::{fmt::Debug, sync::Arc};
+use std::fmt::Debug;
 
 pub struct BatchProcessor {
     connection_pool: PgDbPool,
@@ -235,7 +235,7 @@ impl BatchTransactionsProcessor for BatchProcessor {
 
     async fn process_transactions(
         &self,
-        transactions: Arc<Vec<Transaction>>,
+        transactions: Vec<Transaction>,
     ) -> Result<ProcessingResult, TransactionProcessingError> {
         let (transaction_models, user_transaction_models, block_metadata_transaction_models
             , payload_plural, event_plural, block_events, write_set_changes, write_set_plural) =

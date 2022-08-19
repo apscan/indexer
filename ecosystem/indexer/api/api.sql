@@ -1,6 +1,5 @@
 -- Your SQL goes here
 create schema api;
-DROP ROLE IF EXISTS apscan_api;
 create role apscan_api noinherit login password 'aptos1234';
 grant usage on schema api to apscan_api;
 

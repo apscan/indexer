@@ -101,7 +101,7 @@ impl TransactionFetcherTrait for TransactionFetcher {
     async fn fetch_next_batch(&mut self, batch_size : u8) -> Vec<Transaction> {
         let mut transactions_buffer = self.transactions_buffer.lock().await;
         let mut batch_transactions = Vec::new();
-        if transactions_buffer.is_empty() {
+        if transactions_buffer.len() < batch_size as usize{
             // Fill it up!
             loop {
                 let res = self

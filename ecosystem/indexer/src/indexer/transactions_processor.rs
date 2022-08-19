@@ -15,7 +15,7 @@ use aptos_rest_client::Transaction;
 use async_trait::async_trait;
 use diesel::{prelude::*, RunQueryDsl};
 use schema::processor_statuses::{self, dsl};
-use std::{fmt::Debug, sync::Arc};
+use std::{fmt::Debug};
 
 /// The `BatchTransactionsProcessor` is used by an instance of a `Tailer` to process transactions
 #[async_trait]
@@ -29,7 +29,7 @@ pub trait BatchTransactionsProcessor: Send + Sync + Debug {
     /// and it will be retried next time the indexer is started.
     async fn process_transactions(
         &self,
-        transactions: Arc<Vec<Transaction>>,
+        transactions: Vec<Transaction>,
     ) -> Result<ProcessingResult, TransactionProcessingError>;
 
     /// Gets a reference to the connection pool
@@ -63,7 +63,7 @@ pub trait BatchTransactionsProcessor: Send + Sync + Debug {
     /// This is a helper method, tying together the other helper methods to allow tracking status in the DB
     async fn process_transactions_with_status(
         &self,
-        transactions: Arc<Vec<Transaction>>,
+        transactions: Vec<Transaction>,
     ) -> Result<ProcessingResult, TransactionProcessingError> {
         PROCESSOR_INVOCATIONS
             .with_label_values(&[self.name()])
